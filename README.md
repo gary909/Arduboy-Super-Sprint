@@ -2,9 +2,12 @@
 
 My attempt at making a Super Sprint style game on the Arduboy.
 
-V2
+V3 - Starting to add courses
 
-Drift physics added to B Button
+<img width="602" height="228" alt="image" src="https://github.com/user-attachments/assets/c85a4640-d6c7-4c3b-bab2-8d40a8e0cc52" />
+
+
+V2 - Drift physics added to B Button
 
 
 V1:
