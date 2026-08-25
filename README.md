@@ -2,6 +2,10 @@
 
 My attempt at making a Super Sprint style game on the Arduboy.
 
+V2
+
+Drift physics added to B Button
+
 
 V1:
 
