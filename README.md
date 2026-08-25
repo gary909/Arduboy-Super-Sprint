@@ -2,7 +2,10 @@
 
 My attempt at making a Super Sprint style game on the Arduboy.
 
-V3 - Starting to add courses 
+V3 - Starting to add courses / Added Up button for Brake and Down button for reverse
+
+<img width="300" height="256" alt="IMG_20260825_212504028 (1)" src="https://github.com/user-attachments/assets/67a29b61-15a4-464d-8c77-ae711a13124f" />
+
 
 FYI Display Details 
 
