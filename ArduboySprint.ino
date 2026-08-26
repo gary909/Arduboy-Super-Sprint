@@ -1,3 +1,4 @@
+// V7 - Added Race Intro screen ("RACE 1/8") before track loads.
 // V6 - Added Top 5 Highscore Screen with EEPROM storage & 2-second finish delay
 // V5 - Added Title Screen & Initials Entry System
 // V4 - Added Timer, lap counter
@@ -12,6 +13,7 @@ Arduboy2 arduboy;
 enum GameState {
   STATE_TITLE,
   STATE_INITIALS,
+  STATE_RACE_INTRO,
   STATE_GAME,
   STATE_HIGHSCORE
 };
@@ -174,7 +176,7 @@ void loadHighScoresFromEEPROM() {
   if (magic == EEPROM_MAGIC_VALUE) {
     EEPROM.get(EEPROM_SCORES_ADDRESS, topScores);
   } else {
-    // Populate default default times (e.g. 1:30:00 = 5400 frames down to 2:10:00 = 7800 frames)
+    // Populate default times
     topScores[0] = (HighScoreEntry){"ACE", 5400};
     topScores[1] = (HighScoreEntry){"MAX", 6000};
     topScores[2] = (HighScoreEntry){"DRI", 6600};
@@ -364,8 +366,7 @@ void updateInitialsScreen() {
   if (arduboy.justPressed(A_BUTTON)) {
     currentInitialIdx++;
     if (currentInitialIdx >= 3) {
-      resetRace();
-      currentState = STATE_GAME;
+      currentState = STATE_RACE_INTRO;
       return;
     }
   }
@@ -393,6 +394,24 @@ void updateInitialsScreen() {
 
   drawString3x5(22, 50, "UP/DN: CHOOSE  A: NEXT");
   blinkTimer++;
+}
+
+// --- Race Intro Screen Handler ---
+void updateRaceIntroScreen() {
+  if (arduboy.justPressed(A_BUTTON) || arduboy.justPressed(B_BUTTON) ||
+      arduboy.justPressed(UP_BUTTON) || arduboy.justPressed(DOWN_BUTTON) ||
+      arduboy.justPressed(LEFT_BUTTON) || arduboy.justPressed(RIGHT_BUTTON)) {
+    resetRace();
+    currentState = STATE_GAME;
+    return;
+  }
+
+  drawString3x5(48, 24, "RACE 1/8");
+
+  blinkTimer++;
+  if ((blinkTimer / 30) % 2 == 0) {
+    drawString3x5(24, 42, "PRESS ANY BUTTON TO START");
+  }
 }
 
 // --- High Score Leaderboard Handler ---
@@ -580,6 +599,9 @@ void loop() {
       break;
     case STATE_INITIALS:
       updateInitialsScreen();
+      break;
+    case STATE_RACE_INTRO:
+      updateRaceIntroScreen();
       break;
     case STATE_GAME:
       updateGameScreen();
