@@ -1,3 +1,4 @@
+// V9 - Added flashing highscore
 // V8 - Added Course 2 support, Course 2 track walls, dynamic start/checkpoints, and EEPROM support for Course 2 scores
 // V7 - Added Race Intro screen ("RACE 1/8") before track loads
 // V6 - Added Top 5 Highscore Screen with EEPROM storage & 2-second finish delay
@@ -45,7 +46,7 @@ uint8_t blinkTimer = 0;
 // --- Post-Race State ---
 uint16_t finishDelayFrames = 0;
 
-// --- 3x5 Pixel Font Data (0-9, A-Z, space, colon, slash) ---
+// --- 3x5 Pixel Font Data (0-9, A-Z, space, colon, slash, >) ---
 const uint8_t PROGMEM font3x5[][3] = {
   {0x1F, 0x11, 0x1F}, // 0
   {0x00, 0x1F, 0x00}, // 1
@@ -85,7 +86,8 @@ const uint8_t PROGMEM font3x5[][3] = {
   {0x1F, 0x08, 0x1F}, // W (35)
   {0x1B, 0x04, 0x1B}, // X (36)
   {0x03, 0x1C, 0x03}, // Y (37)
-  {0x19, 0x15, 0x13}  // Z (38)
+  {0x19, 0x15, 0x13}, // Z (38)
+  {0x14, 0x08, 0x14}  // > (39)
 };
 
 void drawChar3x5(int16_t x, int16_t y, char c) {
@@ -95,6 +97,7 @@ void drawChar3x5(int16_t x, int16_t y, char c) {
   else if (c == '/') idx = 11;
   else if (c >= 'A' && c <= 'Z') idx = c - 'A' + 13;
   else if (c >= 'a' && c <= 'z') idx = c - 'a' + 13;
+  else if (c == '>') idx = 39;
 
   for (uint8_t col = 0; col < 3; col++) {
     uint8_t line = pgm_read_byte(&font3x5[idx][col]);
@@ -496,16 +499,18 @@ void updateHighScoreScreen() {
     rankStr[2] = '\0';
     drawString3x5(24, rowY, rankStr);
 
-    drawString3x5(42, rowY, topScores[currentTrack][i].initials);
-
     char timeBuf[6];
     formatTime(topScores[currentTrack][i].frames, timeBuf);
-    drawString3x5(76, rowY, timeBuf);
 
     if (i == lastPlayerRank) {
       if ((blinkTimer / 15) % 2 == 0) {
         drawString3x5(14, rowY, ">");
+        drawString3x5(42, rowY, topScores[currentTrack][i].initials);
+        drawString3x5(76, rowY, timeBuf);
       }
+    } else {
+      drawString3x5(42, rowY, topScores[currentTrack][i].initials);
+      drawString3x5(76, rowY, timeBuf);
     }
   }
 
@@ -545,6 +550,7 @@ void updateGameScreen() {
     finishDelayFrames++;
     if (finishDelayFrames >= 120) {
       insertHighScore(playerInitials, totalRaceFrames);
+      blinkTimer = 0;
       currentState = STATE_HIGHSCORE;
       return;
     }
