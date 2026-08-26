@@ -2,6 +2,11 @@
 
 My attempt at making a Super Sprint style game on the Arduboy.
 
+V4 - Added Timer, lap counter
+
+<img width="300" height="206" alt="arduboytext" src="https://github.com/user-attachments/assets/a2cc6743-3f00-4560-949f-1d6430877b53" />
+
+
 V3 - Starting to add courses / Added Up button for Brake and Down button for reverse
 
 <img width="300" height="256" alt="IMG_20260825_212504028 (1)" src="https://github.com/user-attachments/assets/67a29b61-15a4-464d-8c77-ae711a13124f" />
