@@ -1,4 +1,5 @@
-// V7 - Added Race Intro screen ("RACE 1/8") before track loads.
+// V8 - Added Course 2 support, Course 2 track walls, dynamic start/checkpoints, and EEPROM support for Course 2 scores
+// V7 - Added Race Intro screen ("RACE 1/8") before track loads
 // V6 - Added Top 5 Highscore Screen with EEPROM storage & 2-second finish delay
 // V5 - Added Title Screen & Initials Entry System
 // V4 - Added Timer, lap counter
@@ -20,6 +21,9 @@ enum GameState {
 
 GameState currentState = STATE_TITLE;
 
+// --- Course & Track Management ---
+uint8_t currentTrack = 0; // 0 = Track 1, 1 = Track 2
+
 // --- High Score System Data ---
 struct HighScoreEntry {
   char initials[4];
@@ -28,9 +32,9 @@ struct HighScoreEntry {
 
 const uint16_t EEPROM_MAGIC_ADDRESS = EEPROM_STORAGE_SPACE_START + 30; // Storage offset
 const uint16_t EEPROM_SCORES_ADDRESS = EEPROM_MAGIC_ADDRESS + 2;
-const uint16_t EEPROM_MAGIC_VALUE = 0x4D44; // "MD" magic bytes to verify initialized data
+const uint16_t EEPROM_MAGIC_VALUE = 0x4D46; // Updated magic byte for V9 track geometry
 
-HighScoreEntry topScores[5];
+HighScoreEntry topScores[2][5]; // High scores for Track 1 and Track 2
 int8_t lastPlayerRank = -1; // Index 0-4 if player placed on board, -1 if missed
 
 // --- Initials Entry State ---
@@ -115,6 +119,7 @@ struct Wall {
   int8_t x1, y1, x2, y2;
 };
 
+// Track 1 Walls
 const Wall PROGMEM track1_walls[] = {
   // Outer boundary
   { 7,   1, 121,   1},
@@ -137,11 +142,46 @@ const Wall PROGMEM track1_walls[] = {
   { 32, 28,  38, 22}
 };
 
-const uint8_t NUM_WALLS = sizeof(track1_walls) / sizeof(Wall);
+// Track 2 Walls
+const Wall PROGMEM track2_walls[] = {
+  { 0, 12, 13, 0 },
+  { 13, 0, 42, 0 },
+  { 42, 0, 56, 14 },
+  { 56, 14, 72, 14 },
+  { 72, 14, 84, 2 },
+  { 84, 2, 109, 2 },
+  { 109, 2, 127, 20 },
+  { 127, 20, 127, 49 },
+  { 127, 49, 111, 63 },
+  { 111, 63, 23, 63 },
+  { 23, 63, 15, 63 },
+  { 15, 63, 0, 48 },
+  { 0, 48, 0, 12 },
+  { 75, 41, 34, 41 },
+  { 34, 41, 31, 38 },
+  { 31, 38, 31, 32 },
+  { 31, 32, 34, 29 },
+  { 34, 29, 39, 29 },
+  { 39, 29, 42, 32 },
+  { 42, 32, 84, 32 },
+  { 84, 32, 92, 24 },
+  { 92, 24, 101, 24 },
+  { 101, 24, 107, 30 },
+  { 107, 30, 107, 35 },
+  { 107, 35, 101, 41 },
+  { 101, 41, 75, 41 }
+};
+
+const uint8_t NUM_WALLS_TRACK1 = sizeof(track1_walls) / sizeof(Wall);
+const uint8_t NUM_WALLS_TRACK2 = sizeof(track2_walls) / sizeof(Wall);
+
+// Active track pointer variables
+const Wall* currentWallArray = track1_walls;
+uint8_t currentNumWalls = NUM_WALLS_TRACK1;
 
 // --- Checkpoint & Start/Finish Lines ---
-const int8_t checkPointX1 = 64, checkPointY1 = 42, checkPointX2 = 64, checkPointY2 = 63;
-const int8_t startLineX1  = 67, startLineY1  = 1,  startLineX2  = 67, startLineY2  = 22;
+int8_t checkPointX1 = 64, checkPointY1 = 42, checkPointX2 = 64, checkPointY2 = 63;
+int8_t startLineX1  = 67, startLineY1  = 1,  startLineX2  = 67, startLineY2  = 22;
 
 // --- Race & Timing State ---
 uint8_t currentLap = 1;
@@ -163,6 +203,24 @@ float moveY = 0.0;
 
 bool wasHandbraking = false;
 
+// --- Dynamic Track Setup ---
+void setupTrackData(uint8_t trackIdx) {
+  currentTrack = trackIdx;
+  if (currentTrack == 0) {
+    currentWallArray = track1_walls;
+    currentNumWalls = NUM_WALLS_TRACK1;
+    startLineX1 = 67; startLineY1 = 1; startLineX2 = 67; startLineY2 = 22;
+    checkPointX1 = 64; checkPointY1 = 42; checkPointX2 = 64; checkPointY2 = 63;
+    carX = 64.0; carY = 10.0; angle = 0.0;
+  } else {
+    currentWallArray = track2_walls;
+    currentNumWalls = NUM_WALLS_TRACK2;
+    startLineX1 = 12; startLineY1 = 1; startLineX2 = 12; startLineY2 = 20;
+    checkPointX1 = 50; checkPointY1 = 44; checkPointX2 = 50; checkPointY2 = 57;
+    carX = 12.0; carY = 10.0; angle = 0.0;
+  }
+}
+
 // --- EEPROM Management ---
 void saveHighScoresToEEPROM() {
   EEPROM.put(EEPROM_MAGIC_ADDRESS, EEPROM_MAGIC_VALUE);
@@ -176,12 +234,20 @@ void loadHighScoresFromEEPROM() {
   if (magic == EEPROM_MAGIC_VALUE) {
     EEPROM.get(EEPROM_SCORES_ADDRESS, topScores);
   } else {
-    // Populate default times
-    topScores[0] = (HighScoreEntry){"ACE", 5400};
-    topScores[1] = (HighScoreEntry){"MAX", 6000};
-    topScores[2] = (HighScoreEntry){"DRI", 6600};
-    topScores[3] = (HighScoreEntry){"SPD", 7200};
-    topScores[4] = (HighScoreEntry){"BOT", 7800};
+    // Default Track 1 Scores
+    topScores[0][0] = (HighScoreEntry){"ACE", 5400};
+    topScores[0][1] = (HighScoreEntry){"MAX", 6000};
+    topScores[0][2] = (HighScoreEntry){"DRI", 6600};
+    topScores[0][3] = (HighScoreEntry){"SPD", 7200};
+    topScores[0][4] = (HighScoreEntry){"BOT", 7800};
+
+    // Default Track 2 Scores
+    topScores[1][0] = (HighScoreEntry){"PRO", 6000};
+    topScores[1][1] = (HighScoreEntry){"RAC", 6600};
+    topScores[1][2] = (HighScoreEntry){"SLI", 7200};
+    topScores[1][3] = (HighScoreEntry){"TUR", 7800};
+    topScores[1][4] = (HighScoreEntry){"NEO", 8400};
+
     saveHighScoresToEEPROM();
   }
 }
@@ -189,16 +255,16 @@ void loadHighScoresFromEEPROM() {
 void insertHighScore(const char* initials, uint32_t scoreFrames) {
   lastPlayerRank = -1;
   for (int8_t i = 0; i < 5; i++) {
-    if (scoreFrames < topScores[i].frames) {
+    if (scoreFrames < topScores[currentTrack][i].frames) {
       // Shift lower scores down
       for (int8_t j = 4; j > i; j--) {
-        topScores[j] = topScores[j - 1];
+        topScores[currentTrack][j] = topScores[currentTrack][j - 1];
       }
-      topScores[i].initials[0] = initials[0];
-      topScores[i].initials[1] = initials[1];
-      topScores[i].initials[2] = initials[2];
-      topScores[i].initials[3] = '\0';
-      topScores[i].frames = scoreFrames;
+      topScores[currentTrack][i].initials[0] = initials[0];
+      topScores[currentTrack][i].initials[1] = initials[1];
+      topScores[currentTrack][i].initials[2] = initials[2];
+      topScores[currentTrack][i].initials[3] = '\0';
+      topScores[currentTrack][i].frames = scoreFrames;
 
       lastPlayerRank = i;
       saveHighScoresToEEPROM();
@@ -237,49 +303,47 @@ void resetRace() {
   raceFinished = false;
   totalRaceFrames = 0;
   finishDelayFrames = 0;
-  carX = 64.0;
-  carY = 12.0;
-  angle = 0.0;
   angularVelocity = 0.0;
   moveX = 0.0;
   moveY = 0.0;
+  setupTrackData(currentTrack);
 }
 
 void drawTrackAndHUD() {
-  for (uint8_t i = 0; i < NUM_WALLS; i++) {
+  for (uint8_t i = 0; i < currentNumWalls; i++) {
     Wall w;
-    memcpy_P(&w, &track1_walls[i], sizeof(Wall));
+    memcpy_P(&w, &currentWallArray[i], sizeof(Wall));
     arduboy.drawLine(w.x1, w.y1, w.x2, w.y2, WHITE);
   }
   
-  arduboy.drawFastVLine(67, 1, 20, WHITE);
+  arduboy.drawLine(startLineX1, startLineY1, startLineX2, startLineY2, WHITE);
 
-  // Render 3x5 HUD at the bottom of the screen (Y = 57)
+  // Render 3x5 HUD at bottom Y = 57 (or offset if Track 2 overlaps)
+  uint8_t hudY = (currentTrack == 1) ? 58 : 57;
   char timeBuf[6];
   formatTime(totalRaceFrames, timeBuf);
 
   if (raceFinished) {
-    drawString3x5(38, 57, "FINISHED ");
-    drawString3x5(78, 57, timeBuf);
+    drawString3x5(38, hudY, "FINISHED ");
+    drawString3x5(78, hudY, timeBuf);
   } else if (!raceStarted) {
-    drawString3x5(30, 57, "PRESS A TO START");
+    drawString3x5(30, hudY, "PRESS A TO START");
   } else {
-    // Lap counter left-aligned, Timer right-aligned
     char lapBuf[8];
     lapBuf[0] = 'L'; lapBuf[1] = 'A'; lapBuf[2] = 'P'; lapBuf[3] = ' ';
     lapBuf[4] = '0' + currentLap; lapBuf[5] = '/'; lapBuf[6] = '0' + TOTAL_LAPS; lapBuf[7] = '\0';
 
-    drawString3x5(38, 57, lapBuf);
-    drawString3x5(74, 57, timeBuf);
+    drawString3x5(38, hudY, lapBuf);
+    drawString3x5(74, hudY, timeBuf);
   }
 }
 
 bool resolveWallCollision(float &x, float &y, float &vx, float &vy) {
   bool collided = false;
 
-  for (uint8_t i = 0; i < NUM_WALLS; i++) {
+  for (uint8_t i = 0; i < currentNumWalls; i++) {
     Wall w;
-    memcpy_P(&w, &track1_walls[i], sizeof(Wall));
+    memcpy_P(&w, &currentWallArray[i], sizeof(Wall));
 
     float A = x - w.x1;
     float B = y - w.y1;
@@ -337,6 +401,7 @@ void updateTitleScreen() {
   if (arduboy.justPressed(A_BUTTON) || arduboy.justPressed(B_BUTTON) ||
       arduboy.justPressed(UP_BUTTON) || arduboy.justPressed(DOWN_BUTTON) ||
       arduboy.justPressed(LEFT_BUTTON) || arduboy.justPressed(RIGHT_BUTTON)) {
+    currentTrack = 0;
     currentState = STATE_INITIALS;
     currentInitialIdx = 0;
   }
@@ -352,7 +417,6 @@ void updateTitleScreen() {
 
 // --- Initials Input Screen Handler ---
 void updateInitialsScreen() {
-  // Letter navigation (Up/Down)
   if (arduboy.justPressed(UP_BUTTON)) {
     playerInitials[currentInitialIdx]--;
     if (playerInitials[currentInitialIdx] < 'A') playerInitials[currentInitialIdx] = 'Z';
@@ -362,7 +426,6 @@ void updateInitialsScreen() {
     if (playerInitials[currentInitialIdx] > 'Z') playerInitials[currentInitialIdx] = 'A';
   }
 
-  // Select current letter and advance
   if (arduboy.justPressed(A_BUTTON)) {
     currentInitialIdx++;
     if (currentInitialIdx >= 3) {
@@ -371,20 +434,16 @@ void updateInitialsScreen() {
     }
   }
 
-  // Backspace / Delete previous letter
   if (arduboy.justPressed(B_BUTTON) && currentInitialIdx > 0) {
     currentInitialIdx--;
   }
 
-  // Render UI
   drawString3x5(34, 14, "ENTER INITIALS");
 
-  // Display the 3 initials spaced out
   for (uint8_t i = 0; i < 3; i++) {
     int16_t charX = 52 + (i * 10);
     drawChar3x5(charX, 30, playerInitials[i]);
 
-    // Draw active cursor / underline for active slot
     if (i == currentInitialIdx) {
       if ((blinkTimer / 15) % 2 == 0) {
         arduboy.drawFastHLine(charX, 37, 3, WHITE);
@@ -406,38 +465,43 @@ void updateRaceIntroScreen() {
     return;
   }
 
-  drawString3x5(48, 24, "RACE 1/8");
+  char raceBuf[10];
+  raceBuf[0] = 'R'; raceBuf[1] = 'A'; raceBuf[2] = 'C'; raceBuf[3] = 'E'; raceBuf[4] = ' ';
+  raceBuf[5] = '1' + currentTrack; raceBuf[6] = '/'; raceBuf[7] = '8'; raceBuf[8] = '\0';
+
+  drawString3x5(48, 24, raceBuf);
 
   blinkTimer++;
   if ((blinkTimer / 30) % 2 == 0) {
-    drawString3x5(24, 42, "PRESS ANY BUTTON TO START");
+    drawString3x5(14, 42, "PRESS ANY BUTTON TO CONTINUE");
   }
 }
 
 // --- High Score Leaderboard Handler ---
 void updateHighScoreScreen() {
-  drawString3x5(28, 4, "TRACK 1 HIGHSCORES");
+  char titleBuf[20];
+  titleBuf[0] = 'T'; titleBuf[1] = 'R'; titleBuf[2] = 'A'; titleBuf[3] = 'C'; titleBuf[4] = 'K'; titleBuf[5] = ' ';
+  titleBuf[6] = '1' + currentTrack; titleBuf[7] = ' '; titleBuf[8] = 'H'; titleBuf[9] = 'I'; titleBuf[10] = 'G';
+  titleBuf[11] = 'H'; titleBuf[12] = 'S'; titleBuf[13] = 'C'; titleBuf[14] = 'O'; titleBuf[15] = 'R'; titleBuf[16] = 'E'; titleBuf[17] = 'S'; titleBuf[18] = '\0';
+
+  drawString3x5(24, 4, titleBuf);
   arduboy.drawFastHLine(8, 11, 112, WHITE);
 
   for (uint8_t i = 0; i < 5; i++) {
     int16_t rowY = 16 + (i * 8);
 
-    // Rank Number
     char rankStr[3];
     rankStr[0] = '1' + i;
     rankStr[1] = '.';
     rankStr[2] = '\0';
     drawString3x5(24, rowY, rankStr);
 
-    // Initials
-    drawString3x5(42, rowY, topScores[i].initials);
+    drawString3x5(42, rowY, topScores[currentTrack][i].initials);
 
-    // Formatted Time
     char timeBuf[6];
-    formatTime(topScores[i].frames, timeBuf);
+    formatTime(topScores[currentTrack][i].frames, timeBuf);
     drawString3x5(76, rowY, timeBuf);
 
-    // Highlight player rank if placed
     if (i == lastPlayerRank) {
       if ((blinkTimer / 15) % 2 == 0) {
         drawString3x5(14, rowY, ">");
@@ -445,11 +509,21 @@ void updateHighScoreScreen() {
     }
   }
 
-  drawString3x5(26, 57, "PRESS A TO RESTART");
+  if (currentTrack == 0) {
+    drawString3x5(22, 57, "PRESS A FOR NEXT RACE");
+  } else {
+    drawString3x5(26, 57, "PRESS A TO RESTART");
+  }
   blinkTimer++;
 
   if (arduboy.justPressed(A_BUTTON)) {
-    currentState = STATE_TITLE;
+    if (currentTrack == 0) {
+      currentTrack = 1;
+      currentState = STATE_RACE_INTRO;
+    } else {
+      currentTrack = 0;
+      currentState = STATE_TITLE;
+    }
   }
 }
 
@@ -459,7 +533,6 @@ void updateGameScreen() {
   bool isReversing = arduboy.pressed(UP_BUTTON);
   bool isAccelerating = arduboy.pressed(A_BUTTON);
 
-  // Demand a discrete new press to start
   if (!raceStarted && arduboy.justPressed(A_BUTTON)) {
     raceStarted = true;
   }
@@ -468,7 +541,6 @@ void updateGameScreen() {
     totalRaceFrames++;
   }
 
-  // Handle post-race transition (2 second delay = 120 frames at 60 FPS)
   if (raceFinished) {
     finishDelayFrames++;
     if (finishDelayFrames >= 120) {
