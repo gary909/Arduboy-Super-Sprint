@@ -2,6 +2,8 @@
 
 My attempt at making a Super Sprint style game on the Arduboy.
 
+V6 - Added Top 5 Highscore Screen with EEPROM storage & 2-second finish delay
+
 V5 - Added Title Screen & Initials Entry System
 
 <img width="300" alt="arduboy screen v5 1" src="https://github.com/user-attachments/assets/e8c3dd88-3371-4d24-8929-096f4f3b961f" />
