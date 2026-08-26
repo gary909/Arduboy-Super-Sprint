@@ -2,6 +2,8 @@
 
 My attempt at making a Super Sprint style game on the Arduboy.
 
+V7 - Added Race Intro screen ("RACE 1/8") before track loads
+
 V6 - Added Top 5 Highscore Screen with EEPROM storage & 2-second finish delay
 
 V5 - Added Title Screen & Initials Entry System
