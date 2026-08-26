@@ -4,7 +4,7 @@ My attempt at making a Super Sprint style game on the Arduboy.
 
 V5 - Added Title Screen & Initials Entry System
 
-<img width="1353" height="712" alt="IMG_20260826_122324729 (1)" src="https://github.com/user-attachments/assets/e8c3dd88-3371-4d24-8929-096f4f3b961f" />
+<img width="300" alt="IMG_20260826_122324729 (1)" src="https://github.com/user-attachments/assets/e8c3dd88-3371-4d24-8929-096f4f3b961f" />
 
 
 <img width="1197" height="626" alt="IMG_20260826_122435246 (1) (1)" src="https://github.com/user-attachments/assets/64f00393-a6a0-4163-bad7-242c7ef0028e" />
