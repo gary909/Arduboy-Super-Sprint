@@ -1,3 +1,4 @@
+// V5 - Added Title Screen & Initials Entry System
 // V4 - Added Timer, lap counter
 // V3 - Starting to add courses / Added Up button for Brake and Down button for reverse
 // V2 added better car physics (b-button now adds drift)
@@ -5,6 +6,20 @@
 #include <avr/pgmspace.h>
 
 Arduboy2 arduboy;
+
+// --- Game States ---
+enum GameState {
+  STATE_TITLE,
+  STATE_INITIALS,
+  STATE_GAME
+};
+
+GameState currentState = STATE_TITLE;
+
+// --- Initials Entry State ---
+char playerInitials[4] = "AAA";
+uint8_t currentInitialIdx = 0;
+uint8_t blinkTimer = 0;
 
 // --- 3x5 Pixel Font Data (0-9, A-Z, space, colon, slash) ---
 const uint8_t PROGMEM font3x5[][3] = {
@@ -151,6 +166,20 @@ void formatTime(uint32_t frames, char* buffer) {
   buffer[5] = '\0';
 }
 
+void resetRace() {
+  currentLap = 1;
+  checkpointPassed = false;
+  raceStarted = false;
+  raceFinished = false;
+  totalRaceFrames = 0;
+  carX = 64.0;
+  carY = 12.0;
+  angle = 0.0;
+  angularVelocity = 0.0;
+  moveX = 0.0;
+  moveY = 0.0;
+}
+
 void drawTrackAndHUD() {
   for (uint8_t i = 0; i < NUM_WALLS; i++) {
     Wall w;
@@ -160,7 +189,7 @@ void drawTrackAndHUD() {
   
   arduboy.drawFastVLine(67, 1, 20, WHITE);
 
-  // Render 3x5 HUD at the very bottom of the screen (Y = 57)
+  // Render 3x5 HUD at the bottom of the screen (Y = 57)
   char timeBuf[6];
   formatTime(totalRaceFrames, timeBuf);
 
@@ -238,21 +267,79 @@ bool resolveWallCollision(float &x, float &y, float &vx, float &vy) {
   return collided;
 }
 
-void setup() {
-  arduboy.begin();
-  arduboy.setFrameRate(60);
+// --- Title Screen Handler ---
+void updateTitleScreen() {
+  if (arduboy.justPressed(A_BUTTON) || arduboy.justPressed(B_BUTTON) ||
+      arduboy.justPressed(UP_BUTTON) || arduboy.justPressed(DOWN_BUTTON) ||
+      arduboy.justPressed(LEFT_BUTTON) || arduboy.justPressed(RIGHT_BUTTON)) {
+    currentState = STATE_INITIALS;
+    currentInitialIdx = 0;
+  }
+
+  arduboy.drawRect(4, 4, 120, 56, WHITE);
+  drawString3x5(28, 18, "MOTODROME DRIFTER");
+  
+  blinkTimer++;
+  if ((blinkTimer / 30) % 2 == 0) {
+    drawString3x5(30, 42, "PRESS ANY BUTTON");
+  }
 }
 
-void loop() {
-  if (!arduboy.nextFrame()) return;
+// --- Initials Input Screen Handler ---
+void updateInitialsScreen() {
+  // Letter navigation (Up/Down)
+  if (arduboy.justPressed(UP_BUTTON)) {
+    playerInitials[currentInitialIdx]--;
+    if (playerInitials[currentInitialIdx] < 'A') playerInitials[currentInitialIdx] = 'Z';
+  }
+  if (arduboy.justPressed(DOWN_BUTTON)) {
+    playerInitials[currentInitialIdx]++;
+    if (playerInitials[currentInitialIdx] > 'Z') playerInitials[currentInitialIdx] = 'A';
+  }
 
-  arduboy.pollButtons();
+  // Select current letter and advance
+  if (arduboy.justPressed(A_BUTTON)) {
+    currentInitialIdx++;
+    if (currentInitialIdx >= 3) {
+      resetRace();
+      currentState = STATE_GAME;
+      return;
+    }
+  }
 
+  // Backspace / Delete previous letter
+  if (arduboy.justPressed(B_BUTTON) && currentInitialIdx > 0) {
+    currentInitialIdx--;
+  }
+
+  // Render UI
+  drawString3x5(34, 14, "ENTER INITIALS");
+
+  // Display the 3 initials spaced out
+  for (uint8_t i = 0; i < 3; i++) {
+    int16_t charX = 52 + (i * 10);
+    drawChar3x5(charX, 30, playerInitials[i]);
+
+    // Draw active cursor / underline for active slot
+    if (i == currentInitialIdx) {
+      if ((blinkTimer / 15) % 2 == 0) {
+        arduboy.drawFastHLine(charX, 37, 3, WHITE);
+      }
+    }
+  }
+
+  drawString3x5(22, 50, "UP/DN: CHOOSE  A: NEXT");
+  blinkTimer++;
+}
+
+// --- Main Race Loop Handler ---
+void updateGameScreen() {
   bool isHandbraking = arduboy.pressed(B_BUTTON);
   bool isReversing = arduboy.pressed(UP_BUTTON);
   bool isAccelerating = arduboy.pressed(A_BUTTON);
 
-  if (!raceStarted && (isAccelerating || isReversing)) {
+  // Use justPressed to demand a discrete new press for the starting trigger
+  if (!raceStarted && arduboy.justPressed(A_BUTTON)) {
     raceStarted = true;
   }
 
@@ -284,11 +371,11 @@ void loop() {
   angularVelocity *= rotationalDamping;
 
   // Acceleration & Braking
-  if (isAccelerating) {
+  if (isAccelerating && raceStarted) {
     float accel = 0.05;
     moveX += cos(angle) * accel;
     moveY += sin(angle) * accel;
-  } else if (isReversing) {
+  } else if (isReversing && raceStarted) {
     float revAccel = 0.03;
     moveX -= cos(angle) * revAccel;
     moveY -= sin(angle) * revAccel;
@@ -356,12 +443,35 @@ void loop() {
   }
 
   // Render Frame
-  arduboy.clear();
   drawTrackAndHUD();
   
   int endX = carX + cos(angle) * 6;
   int endY = carY + sin(angle) * 6;
   arduboy.drawLine((int)carX, (int)carY, endX, endY, WHITE);
+}
+
+void setup() {
+  arduboy.begin();
+  arduboy.setFrameRate(60);
+}
+
+void loop() {
+  if (!arduboy.nextFrame()) return;
+
+  arduboy.pollButtons();
+  arduboy.clear();
+
+  switch (currentState) {
+    case STATE_TITLE:
+      updateTitleScreen();
+      break;
+    case STATE_INITIALS:
+      updateInitialsScreen();
+      break;
+    case STATE_GAME:
+      updateGameScreen();
+      break;
+  }
 
   arduboy.display();
 }
