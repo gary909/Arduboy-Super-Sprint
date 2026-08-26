@@ -11,6 +11,8 @@ https://github.com/gary909/Canvas-Visualiser
 
 <img width="480" height="488" alt="canvasDrawer-ezgif com-optimize" src="https://github.com/user-attachments/assets/715601fb-57d3-40d5-ab4f-3d8cd7fff5fa" />
 
+Copy the cordinates from the app, into the .ino code (replacing 'level 2' etc). 
+
 Also created a single level version of the code so you can quickly prototype new level designs:
 
 https://github.com/gary909/Arduboy-Super-Sprint-Single-Level-/blob/main/README.md
