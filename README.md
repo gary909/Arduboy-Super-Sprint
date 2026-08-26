@@ -5,9 +5,9 @@ My attempt at making a Super Sprint style game on the Arduboy.
 ______________________________________
 Tools for level creation:
 
-Draw the level and then copy the coordinates.  Code can be found here:
+Draw the level and then copy the coordinates.  You can try it out here here:
 
-https://github.com/gary909/Canvas-Visualiser
+[https://github.com/gary909/Canvas-Visualiser](https://gary909.github.io/Canvas-Visualiser/)
 
 <img width="480" height="488" alt="canvasDrawer-ezgif com-optimize" src="https://github.com/user-attachments/assets/715601fb-57d3-40d5-ab4f-3d8cd7fff5fa" />
 
