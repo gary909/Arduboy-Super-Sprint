@@ -2,6 +2,13 @@
 
 My attempt at making a Super Sprint style game on the Arduboy.
 
+V8 - Added Course 2 support, Course 2 track walls, dynamic start/checkpoints, and EEPROM support for Course 2 scores
+
+<img width="300" height="398" alt="IMG_20260826_173818193 (1)" src="https://github.com/user-attachments/assets/dd071701-15e3-4cad-97ce-38c6465ac902" />
+
+<img width="300" height="398" alt="IMG_20260826_173746420 (1)" src="https://github.com/user-attachments/assets/fa63dd8b-6913-4aa7-8a1b-de5d773b4830" />
+
+
 V7 - Added Race Intro screen ("RACE 1/8") before track loads
 
 V6 - Added Top 5 Highscore Screen with EEPROM storage & 2-second finish delay
