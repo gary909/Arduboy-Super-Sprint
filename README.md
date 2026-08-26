@@ -2,6 +2,8 @@
 
 My attempt at making a Super Sprint style game on the Arduboy.
 
+V9 - Added flashing highscore
+
 ______________________________________
 Tools for level creation:
 
