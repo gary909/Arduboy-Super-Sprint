@@ -2,6 +2,21 @@
 
 My attempt at making a Super Sprint style game on the Arduboy.
 
+______________________________________
+Tools for level creation:
+
+Draw the level and then copy the coordinates.  Code can be found here:
+
+https://github.com/gary909/Canvas-Visualiser
+
+<img width="480" height="488" alt="canvasDrawer-ezgif com-optimize" src="https://github.com/user-attachments/assets/715601fb-57d3-40d5-ab4f-3d8cd7fff5fa" />
+
+Also created a single level version of the code so you can quickly prototype new level designs:
+
+https://github.com/gary909/Arduboy-Super-Sprint-Single-Level-/blob/main/README.md
+
+______________________________________
+
 V8 - Added Course 2 support, Course 2 track walls, dynamic start/checkpoints, and EEPROM support for Course 2 scores
 
 <img width="300" height="398" alt="IMG_20260826_173818193 (1)" src="https://github.com/user-attachments/assets/dd071701-15e3-4cad-97ce-38c6465ac902" />
