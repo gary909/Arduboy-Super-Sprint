@@ -215,7 +215,7 @@ void setupTrackData(uint8_t trackIdx) {
   } else {
     currentWallArray = track2_walls;
     currentNumWalls = NUM_WALLS_TRACK2;
-    startLineX1 = 12; startLineY1 = 1; startLineX2 = 12; startLineY2 = 20;
+    startLineX1 = 1; startLineY1 = 33; startLineX2 = 30; startLineY2 = 33;
     checkPointX1 = 50; checkPointY1 = 44; checkPointX2 = 50; checkPointY2 = 57;
     carX = 12.0; carY = 10.0; angle = 0.0;
   }
