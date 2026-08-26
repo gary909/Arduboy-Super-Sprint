@@ -1,42 +1,123 @@
+// V4 - Added Timer, lap counter
+// V3 - Starting to add courses / Added Up button for Brake and Down button for reverse
+// V2 added better car physics (b-button now adds drift)
 #include <Arduboy2.h>
 #include <avr/pgmspace.h>
 
-// V3 - Starting to add courses / Added Up button for Brake and Down button for reverse
-// V2 added better car physics (b-button now adds drift)
-
 Arduboy2 arduboy;
 
-// Track Data Structures
+// --- 3x5 Pixel Font Data (0-9, A-Z, space, colon, slash) ---
+const uint8_t PROGMEM font3x5[][3] = {
+  {0x1F, 0x11, 0x1F}, // 0
+  {0x00, 0x1F, 0x00}, // 1
+  {0x1D, 0x15, 0x17}, // 2
+  {0x15, 0x15, 0x1F}, // 3
+  {0x07, 0x04, 0x1F}, // 4
+  {0x17, 0x15, 0x1D}, // 5
+  {0x1F, 0x15, 0x1D}, // 6
+  {0x01, 0x01, 0x1F}, // 7
+  {0x1F, 0x15, 0x1F}, // 8
+  {0x17, 0x15, 0x1F}, // 9
+  {0x00, 0x0A, 0x00}, // : (10)
+  {0x18, 0x04, 0x03}, // / (11)
+  {0x00, 0x00, 0x00}, // Space (12)
+  {0x1F, 0x05, 0x1F}, // A (13)
+  {0x1F, 0x15, 0x0A}, // B (14)
+  {0x0E, 0x11, 0x11}, // C (15)
+  {0x1F, 0x11, 0x0E}, // D (16)
+  {0x1F, 0x15, 0x11}, // E (17)
+  {0x1F, 0x05, 0x01}, // F (18)
+  {0x0E, 0x11, 0x1D}, // G (19)
+  {0x1F, 0x04, 0x1F}, // H (20)
+  {0x11, 0x1F, 0x11}, // I (21)
+  {0x08, 0x10, 0x0F}, // J (22)
+  {0x1F, 0x04, 0x1B}, // K (23)
+  {0x1F, 0x10, 0x10}, // L (24)
+  {0x1F, 0x02, 0x1F}, // M (25)
+  {0x1F, 0x02, 0x1C}, // N (26)
+  {0x0E, 0x11, 0x0E}, // O (27)
+  {0x1F, 0x05, 0x02}, // P (28)
+  {0x0E, 0x13, 0x1E}, // Q (29)
+  {0x1F, 0x05, 0x1A}, // R (30)
+  {0x12, 0x15, 0x09}, // S (31)
+  {0x01, 0x1F, 0x01}, // T (32)
+  {0x0F, 0x10, 0x0F}, // U (33)
+  {0x07, 0x18, 0x07}, // V (34)
+  {0x1F, 0x08, 0x1F}, // W (35)
+  {0x1B, 0x04, 0x1B}, // X (36)
+  {0x03, 0x1C, 0x03}, // Y (37)
+  {0x19, 0x15, 0x13}  // Z (38)
+};
+
+void drawChar3x5(int16_t x, int16_t y, char c) {
+  uint8_t idx = 12; // default space
+  if (c >= '0' && c <= '9') idx = c - '0';
+  else if (c == ':') idx = 10;
+  else if (c == '/') idx = 11;
+  else if (c >= 'A' && c <= 'Z') idx = c - 'A' + 13;
+  else if (c >= 'a' && c <= 'z') idx = c - 'a' + 13;
+
+  for (uint8_t col = 0; col < 3; col++) {
+    uint8_t line = pgm_read_byte(&font3x5[idx][col]);
+    for (uint8_t row = 0; row < 5; row++) {
+      if (line & (1 << row)) {
+        arduboy.drawPixel(x + col, y + row, WHITE);
+      }
+    }
+  }
+}
+
+void drawString3x5(int16_t x, int16_t y, const char* str) {
+  while (*str) {
+    drawChar3x5(x, y, *str);
+    x += 4; // 3 pixels wide + 1 pixel spacing
+    str++;
+  }
+}
+
+// --- Track Data Structures ---
 struct Wall {
   int8_t x1, y1, x2, y2;
 };
 
-// Sprint-style track layout with rounded (chamfered) outer and inner corners
 const Wall PROGMEM track1_walls[] = {
-  // Outer boundary walls (chamfered corners)
-  { 7,   1, 121,   1}, // Top
-  {121,  1, 127,   7}, // Top-Right Diagonal
-  {127,  7, 127,  57}, // Right
-  {127, 57, 121,  63}, // Bottom-Right Diagonal
-  {121, 63,   7,  63}, // Bottom
-  {  7, 63,   1,  57}, // Bottom-Left Diagonal
-  {  1, 57,   1,   7}, // Left
-  {  1,  7,   7,   1}, // Top-Left Diagonal
+  // Outer boundary
+  { 7,   1, 121,   1},
+  {121,  1, 127,   7},
+  {127,  7, 127,  57},
+  {127, 57, 121,  63},
+  {121, 63,   7,  63},
+  {  7, 63,   1,  57},
+  {  1, 57,   1,   7},
+  {  1,  7,   7,   1},
 
-  // Inner island with chamfered corners
-  { 38, 22,  90, 22}, // Top
-  { 90, 22,  96, 28}, // Top-Right Diagonal
-  { 96, 28,  96, 36}, // Right
-  { 96, 36,  90, 42}, // Bottom-Right Diagonal
-  { 90, 42,  38, 42}, // Bottom
-  { 38, 42,  32, 36}, // Bottom-Left Diagonal
-  { 32, 36,  32, 28}, // Left
-  { 32, 28,  38, 22}  // Top-Left Diagonal
+  // Inner island
+  { 38, 22,  90, 22},
+  { 90, 22,  96, 28},
+  { 96, 28,  96, 36},
+  { 96, 36,  90, 42},
+  { 90, 42,  38, 42},
+  { 38, 42,  32, 36},
+  { 32, 36,  32, 28},
+  { 32, 28,  38, 22}
 };
 
 const uint8_t NUM_WALLS = sizeof(track1_walls) / sizeof(Wall);
 
-// Car State Variables
+// --- Checkpoint & Start/Finish Lines ---
+const int8_t checkPointX1 = 64, checkPointY1 = 42, checkPointX2 = 64, checkPointY2 = 63;
+const int8_t startLineX1  = 67, startLineY1  = 1,  startLineX2  = 67, startLineY2  = 22;
+
+// --- Race & Timing State ---
+uint8_t currentLap = 1;
+const uint8_t TOTAL_LAPS = 5;
+bool checkpointPassed = false;
+bool raceStarted = false;
+bool raceFinished = false;
+
+uint32_t totalRaceFrames = 0;
+
+// --- Car Physics State ---
 float carX = 64.0;
 float carY = 12.0;
 float angle = 0.0;
@@ -47,16 +128,58 @@ float moveY = 0.0;
 
 bool wasHandbraking = false;
 
-void drawTrack() {
+// --- Helpers ---
+bool linesIntersect(float ax, float ay, float bx, float by, float cx, float cy, float dx, float dy) {
+  float denom = (dy - cy) * (bx - ax) - (dx - cx) * (by - ay);
+  if (denom == 0) return false;
+
+  float ua = ((dx - cx) * (ay - cy) - (dy - cy) * (ax - cx)) / denom;
+  float ub = ((bx - ax) * (ay - cy) - (by - ay) * (ax - cx)) / denom;
+
+  return (ua >= 0.0 && ua <= 1.0 && ub >= 0.0 && ub <= 1.0);
+}
+
+void formatTime(uint32_t frames, char* buffer) {
+  uint32_t seconds = frames / 60;
+  uint32_t hundredths = (frames % 60) * 100 / 60;
+
+  buffer[0] = '0' + (seconds / 10);
+  buffer[1] = '0' + (seconds % 10);
+  buffer[2] = ':';
+  buffer[3] = '0' + (hundredths / 10);
+  buffer[4] = '0' + (hundredths % 10);
+  buffer[5] = '\0';
+}
+
+void drawTrackAndHUD() {
   for (uint8_t i = 0; i < NUM_WALLS; i++) {
     Wall w;
     memcpy_P(&w, &track1_walls[i], sizeof(Wall));
     arduboy.drawLine(w.x1, w.y1, w.x2, w.y2, WHITE);
   }
+  
   arduboy.drawFastVLine(67, 1, 20, WHITE);
+
+  // Render 3x5 HUD at the very bottom of the screen (Y = 57)
+  char timeBuf[6];
+  formatTime(totalRaceFrames, timeBuf);
+
+  if (raceFinished) {
+    drawString3x5(38, 57, "FINISHED ");
+    drawString3x5(78, 57, timeBuf);
+  } else if (!raceStarted) {
+    drawString3x5(30, 57, "PRESS A TO START");
+  } else {
+    // Lap counter left-aligned, Timer right-aligned
+    char lapBuf[8];
+    lapBuf[0] = 'L'; lapBuf[1] = 'A'; lapBuf[2] = 'P'; lapBuf[3] = ' ';
+    lapBuf[4] = '0' + currentLap; lapBuf[5] = '/'; lapBuf[6] = '0' + TOTAL_LAPS; lapBuf[7] = '\0';
+
+    drawString3x5(38, 57, lapBuf);
+    drawString3x5(74, 57, timeBuf);
+  }
 }
 
-// Wall Collision Resolution
 bool resolveWallCollision(float &x, float &y, float &vx, float &vy) {
   bool collided = false;
 
@@ -90,7 +213,7 @@ bool resolveWallCollision(float &x, float &y, float &vx, float &vy) {
     float dy = y - closestY;
     float distSq = dx * dx + dy * dy;
     
-    float radius = 3.0; // Collision distance threshold
+    float radius = 3.0;
 
     if (distSq < (radius * radius) && distSq > 0.0001) {
       collided = true;
@@ -127,15 +250,23 @@ void loop() {
 
   bool isHandbraking = arduboy.pressed(B_BUTTON);
   bool isReversing = arduboy.pressed(UP_BUTTON);
-  
-  // 1. Handbrake Tap Drag
+  bool isAccelerating = arduboy.pressed(A_BUTTON);
+
+  if (!raceStarted && (isAccelerating || isReversing)) {
+    raceStarted = true;
+  }
+
+  if (raceStarted && !raceFinished) {
+    totalRaceFrames++;
+  }
+
+  // Steering Controls
   if (isHandbraking && !wasHandbraking) {
     moveX *= 0.85;
     moveY *= 0.85;
   }
   wasHandbraking = isHandbraking;
 
-  // 2. Angular Inertia & Turn Rate
   float turnAccel = isHandbraking ? 0.028 : 0.012; 
   if (arduboy.pressed(LEFT_BUTTON))  angularVelocity -= turnAccel;
   if (arduboy.pressed(RIGHT_BUTTON)) angularVelocity += turnAccel;
@@ -152,26 +283,23 @@ void loop() {
   }
   angularVelocity *= rotationalDamping;
 
-  // 3. Acceleration, Reverse, and Footbrake
-  if (arduboy.pressed(A_BUTTON)) {
-    // Forward Acceleration
+  // Acceleration & Braking
+  if (isAccelerating) {
     float accel = 0.05;
     moveX += cos(angle) * accel;
     moveY += sin(angle) * accel;
   } else if (isReversing) {
-    // Reverse Acceleration (opposite vector)
     float revAccel = 0.03;
     moveX -= cos(angle) * revAccel;
     moveY -= sin(angle) * revAccel;
   }
 
   if (arduboy.pressed(DOWN_BUTTON)) {
-    // Footbrake (rapid deceleration)
     moveX *= 0.85;
     moveY *= 0.85;
   }
 
-  // 4. Drift Physics & Friction
+  // Drift Physics
   if (isHandbraking) {
     moveX *= 0.998;
     moveY *= 0.998;
@@ -180,7 +308,6 @@ void loop() {
     moveX *= 0.96;
     moveY *= 0.96;
 
-    // Direct alignment toward facing angle (supports negative speed direction)
     float dotProduct = moveX * cos(angle) + moveY * sin(angle);
     float direction = (dotProduct >= 0) ? 1.0 : -1.0;
 
@@ -191,7 +318,7 @@ void loop() {
     moveY = (moveY * 0.985) + (targetMoveY * 0.015);
   }
 
-  // 5. Cap Max Velocity (1.0 Forward, 0.5 Reverse)
+  // Velocity Cap
   float currentSpeed = sqrt(moveX * moveX + moveY * moveY);
   float maxAllowedSpeed = isReversing ? 0.5 : 1.0;
 
@@ -200,14 +327,37 @@ void loop() {
     moveY = (moveY / currentSpeed) * maxAllowedSpeed;
   }
 
-  // 6. Position Update & Collision Resolution
+  // Collision & Position
+  float prevX = carX;
+  float prevY = carY;
+
   carX += moveX;
   carY += moveY;
   resolveWallCollision(carX, carY, moveX, moveY);
 
-  // 7. Render Frame
+  // Checkpoints & Laps
+  if (raceStarted && !raceFinished) {
+    if (!checkpointPassed) {
+      if (linesIntersect(prevX, prevY, carX, carY, checkPointX1, checkPointY1, checkPointX2, checkPointY2)) {
+        checkpointPassed = true;
+      }
+    }
+
+    if (checkpointPassed) {
+      if (linesIntersect(prevX, prevY, carX, carY, startLineX1, startLineY1, startLineX2, startLineY2)) {
+        checkpointPassed = false;
+        currentLap++;
+
+        if (currentLap > TOTAL_LAPS) {
+          raceFinished = true;
+        }
+      }
+    }
+  }
+
+  // Render Frame
   arduboy.clear();
-  drawTrack();
+  drawTrackAndHUD();
   
   int endX = carX + cos(angle) * 6;
   int endY = carY + sin(angle) * 6;
