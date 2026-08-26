@@ -1,3 +1,4 @@
+// V6 - Added Top 5 Highscore Screen with EEPROM storage & 2-second finish delay
 // V5 - Added Title Screen & Initials Entry System
 // V4 - Added Timer, lap counter
 // V3 - Starting to add courses / Added Up button for Brake and Down button for reverse
@@ -11,15 +12,32 @@ Arduboy2 arduboy;
 enum GameState {
   STATE_TITLE,
   STATE_INITIALS,
-  STATE_GAME
+  STATE_GAME,
+  STATE_HIGHSCORE
 };
 
 GameState currentState = STATE_TITLE;
+
+// --- High Score System Data ---
+struct HighScoreEntry {
+  char initials[4];
+  uint32_t frames;
+};
+
+const uint16_t EEPROM_MAGIC_ADDRESS = EEPROM_STORAGE_SPACE_START + 30; // Storage offset
+const uint16_t EEPROM_SCORES_ADDRESS = EEPROM_MAGIC_ADDRESS + 2;
+const uint16_t EEPROM_MAGIC_VALUE = 0x4D44; // "MD" magic bytes to verify initialized data
+
+HighScoreEntry topScores[5];
+int8_t lastPlayerRank = -1; // Index 0-4 if player placed on board, -1 if missed
 
 // --- Initials Entry State ---
 char playerInitials[4] = "AAA";
 uint8_t currentInitialIdx = 0;
 uint8_t blinkTimer = 0;
+
+// --- Post-Race State ---
+uint16_t finishDelayFrames = 0;
 
 // --- 3x5 Pixel Font Data (0-9, A-Z, space, colon, slash) ---
 const uint8_t PROGMEM font3x5[][3] = {
@@ -143,6 +161,50 @@ float moveY = 0.0;
 
 bool wasHandbraking = false;
 
+// --- EEPROM Management ---
+void saveHighScoresToEEPROM() {
+  EEPROM.put(EEPROM_MAGIC_ADDRESS, EEPROM_MAGIC_VALUE);
+  EEPROM.put(EEPROM_SCORES_ADDRESS, topScores);
+}
+
+void loadHighScoresFromEEPROM() {
+  uint16_t magic = 0;
+  EEPROM.get(EEPROM_MAGIC_ADDRESS, magic);
+
+  if (magic == EEPROM_MAGIC_VALUE) {
+    EEPROM.get(EEPROM_SCORES_ADDRESS, topScores);
+  } else {
+    // Populate default default times (e.g. 1:30:00 = 5400 frames down to 2:10:00 = 7800 frames)
+    topScores[0] = (HighScoreEntry){"ACE", 5400};
+    topScores[1] = (HighScoreEntry){"MAX", 6000};
+    topScores[2] = (HighScoreEntry){"DRI", 6600};
+    topScores[3] = (HighScoreEntry){"SPD", 7200};
+    topScores[4] = (HighScoreEntry){"BOT", 7800};
+    saveHighScoresToEEPROM();
+  }
+}
+
+void insertHighScore(const char* initials, uint32_t scoreFrames) {
+  lastPlayerRank = -1;
+  for (int8_t i = 0; i < 5; i++) {
+    if (scoreFrames < topScores[i].frames) {
+      // Shift lower scores down
+      for (int8_t j = 4; j > i; j--) {
+        topScores[j] = topScores[j - 1];
+      }
+      topScores[i].initials[0] = initials[0];
+      topScores[i].initials[1] = initials[1];
+      topScores[i].initials[2] = initials[2];
+      topScores[i].initials[3] = '\0';
+      topScores[i].frames = scoreFrames;
+
+      lastPlayerRank = i;
+      saveHighScoresToEEPROM();
+      break;
+    }
+  }
+}
+
 // --- Helpers ---
 bool linesIntersect(float ax, float ay, float bx, float by, float cx, float cy, float dx, float dy) {
   float denom = (dy - cy) * (bx - ax) - (dx - cx) * (by - ay);
@@ -172,6 +234,7 @@ void resetRace() {
   raceStarted = false;
   raceFinished = false;
   totalRaceFrames = 0;
+  finishDelayFrames = 0;
   carX = 64.0;
   carY = 12.0;
   angle = 0.0;
@@ -332,19 +395,68 @@ void updateInitialsScreen() {
   blinkTimer++;
 }
 
+// --- High Score Leaderboard Handler ---
+void updateHighScoreScreen() {
+  drawString3x5(28, 4, "TRACK 1 HIGHSCORES");
+  arduboy.drawFastHLine(8, 11, 112, WHITE);
+
+  for (uint8_t i = 0; i < 5; i++) {
+    int16_t rowY = 16 + (i * 8);
+
+    // Rank Number
+    char rankStr[3];
+    rankStr[0] = '1' + i;
+    rankStr[1] = '.';
+    rankStr[2] = '\0';
+    drawString3x5(24, rowY, rankStr);
+
+    // Initials
+    drawString3x5(42, rowY, topScores[i].initials);
+
+    // Formatted Time
+    char timeBuf[6];
+    formatTime(topScores[i].frames, timeBuf);
+    drawString3x5(76, rowY, timeBuf);
+
+    // Highlight player rank if placed
+    if (i == lastPlayerRank) {
+      if ((blinkTimer / 15) % 2 == 0) {
+        drawString3x5(14, rowY, ">");
+      }
+    }
+  }
+
+  drawString3x5(26, 57, "PRESS A TO RESTART");
+  blinkTimer++;
+
+  if (arduboy.justPressed(A_BUTTON)) {
+    currentState = STATE_TITLE;
+  }
+}
+
 // --- Main Race Loop Handler ---
 void updateGameScreen() {
   bool isHandbraking = arduboy.pressed(B_BUTTON);
   bool isReversing = arduboy.pressed(UP_BUTTON);
   bool isAccelerating = arduboy.pressed(A_BUTTON);
 
-  // Use justPressed to demand a discrete new press for the starting trigger
+  // Demand a discrete new press to start
   if (!raceStarted && arduboy.justPressed(A_BUTTON)) {
     raceStarted = true;
   }
 
   if (raceStarted && !raceFinished) {
     totalRaceFrames++;
+  }
+
+  // Handle post-race transition (2 second delay = 120 frames at 60 FPS)
+  if (raceFinished) {
+    finishDelayFrames++;
+    if (finishDelayFrames >= 120) {
+      insertHighScore(playerInitials, totalRaceFrames);
+      currentState = STATE_HIGHSCORE;
+      return;
+    }
   }
 
   // Steering Controls
@@ -371,11 +483,11 @@ void updateGameScreen() {
   angularVelocity *= rotationalDamping;
 
   // Acceleration & Braking
-  if (isAccelerating && raceStarted) {
+  if (isAccelerating && raceStarted && !raceFinished) {
     float accel = 0.05;
     moveX += cos(angle) * accel;
     moveY += sin(angle) * accel;
-  } else if (isReversing && raceStarted) {
+  } else if (isReversing && raceStarted && !raceFinished) {
     float revAccel = 0.03;
     moveX -= cos(angle) * revAccel;
     moveY -= sin(angle) * revAccel;
@@ -453,6 +565,7 @@ void updateGameScreen() {
 void setup() {
   arduboy.begin();
   arduboy.setFrameRate(60);
+  loadHighScoresFromEEPROM();
 }
 
 void loop() {
@@ -470,6 +583,9 @@ void loop() {
       break;
     case STATE_GAME:
       updateGameScreen();
+      break;
+    case STATE_HIGHSCORE:
+      updateHighScoreScreen();
       break;
   }
 
