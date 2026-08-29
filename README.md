@@ -4,6 +4,8 @@ My attempt at making a Super Sprint style game on the Arduboy.
 
 V11 - Refactored Main Menu, 2-Player Pass & Play, Level Select, and HUD Guidance
 
+V10 - courses refined. pretty good now. + drunk
+
 V9 - Added flashing highscore
 
 ______________________________________
