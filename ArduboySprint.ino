@@ -1,4 +1,4 @@
-// V11 - Refactored Main Menu, 2-Player Pass & Play, Level Select, and HUD Guidance
+// V12 - Complete 2-Player Pass & Play with Overall League Champion Display
 #include <Arduboy2.h>
 #include <avr/pgmspace.h>
 
@@ -31,6 +31,10 @@ uint8_t levelSelectCursor = 0;
 uint8_t activePlayer = 1; // Player 1 or Player 2 in 2P Mode
 uint32_t p1RaceFrames = 0;
 uint32_t p2RaceFrames = 0;
+
+// 2-Player Overall Series Score Tracking
+uint8_t p1Wins = 0;
+uint8_t p2Wins = 0;
 
 // --- Course & Track Management ---
 const uint8_t TOTAL_TRACKS = 8;
@@ -98,7 +102,8 @@ const uint8_t PROGMEM font3x5[][3] = {
   {0x1B, 0x04, 0x1B}, // X (36)
   {0x03, 0x1C, 0x03}, // Y (37)
   {0x19, 0x15, 0x13}, // Z (38)
-  {0x14, 0x08, 0x14}  // > (39)
+  {0x14, 0x08, 0x14}, // > (39)
+  {0x00, 0x00, 0x00}  // ! (mapped in drawChar3x5)
 };
 
 void drawChar3x5(int16_t x, int16_t y, char c) {
@@ -505,6 +510,8 @@ void updateMenuScreen() {
       currentMode = MODE_2PLAYER;
       activePlayer = 1;
       currentTrack = 0;
+      p1Wins = 0;
+      p2Wins = 0;
       currentState = STATE_RACE_INTRO;
     } else if (menuCursor == 2) {
       currentMode = MODE_LEVEL_SELECT;
@@ -641,14 +648,33 @@ void updatePassPlayScreen() {
   }
 }
 
-// --- League Complete Screen Handler ---
+// --- League Complete Screen Handler (1P & 2P Series Finale) ---
 void updateLeagueCompleteScreen() {
-  drawString3x5(6, 20, "CONGRATULATIONS FOR FINISHING");
-  drawString3x5(42, 30, "THE LEAGUE!");
+  if (currentMode == MODE_2PLAYER) {
+    drawString3x5(34, 8, "SERIES COMPLETE!");
+
+    char scoreBuf[14];
+    scoreBuf[0] = 'P'; scoreBuf[1] = '1'; scoreBuf[2] = ':'; scoreBuf[3] = ' ';
+    scoreBuf[4] = '0' + p1Wins; scoreBuf[5] = ' '; scoreBuf[6] = ' ';
+    scoreBuf[7] = 'P'; scoreBuf[8] = '2'; scoreBuf[9] = ':'; scoreBuf[10] = ' ';
+    scoreBuf[11] = '0' + p2Wins; scoreBuf[12] = '\0';
+    drawString3x5(38, 22, scoreBuf);
+
+    if (p1Wins > p2Wins) {
+      drawString3x5(22, 36, "PLAYER 1 IS CHAMPION!");
+    } else if (p2Wins > p1Wins) {
+      drawString3x5(22, 36, "PLAYER 2 IS CHAMPION!");
+    } else {
+      drawString3x5(34, 36, "SERIES ENDS IN A TIE!");
+    }
+  } else {
+    drawString3x5(6, 20, "CONGRATULATIONS FOR FINISHING");
+    drawString3x5(42, 30, "THE LEAGUE!");
+  }
   
   blinkTimer++;
   if ((blinkTimer / 30) % 2 == 0) {
-    drawString3x5(34, 48, "PRESS TO END");
+    drawString3x5(34, 52, "PRESS TO END");
   }
 
   if (arduboy.justPressed(A_BUTTON) || arduboy.justPressed(B_BUTTON)) {
@@ -659,7 +685,7 @@ void updateLeagueCompleteScreen() {
 // --- High Score & Post-Race Leaderboard Handler ---
 void updateHighScoreScreen() {
   if (currentMode == MODE_2PLAYER) {
-    drawString3x5(36, 12, "RACE RESULT");
+    drawString3x5(36, 10, "RACE RESULT");
 
     char p1Buf[16], p2Buf[16];
     char t1[6], t2[6];
@@ -674,31 +700,37 @@ void updateHighScoreScreen() {
     memcpy(p2Buf + 4, t2, 6);
     p2Buf[10] = '\0';
 
-    bool showWinningScore = ((blinkTimer / 15) % 2 == 0);
+    drawString3x5(38, 22, p1Buf);
+    drawString3x5(38, 32, p2Buf);
+
+    // Flashing match winner text
+    bool flashText = ((blinkTimer / 15) % 2 == 0);
 
     if (p1RaceFrames < p2RaceFrames) {
-      if (showWinningScore) drawString3x5(38, 26, p1Buf);
-      drawString3x5(38, 36, p2Buf);
-      drawString3x5(30, 48, "PLAYER 1 WINS!");
+      if (flashText) drawString3x5(34, 44, "PLAYER 1 WINS!");
     } else if (p2RaceFrames < p1RaceFrames) {
-      drawString3x5(38, 26, p1Buf);
-      if (showWinningScore) drawString3x5(38, 36, p2Buf);
-      drawString3x5(30, 48, "PLAYER 2 WINS!");
+      if (flashText) drawString3x5(34, 44, "PLAYER 2 WINS!");
     } else {
-      drawString3x5(38, 26, p1Buf);
-      drawString3x5(38, 36, p2Buf);
-      drawString3x5(46, 48, "TIE RACE!");
+      if (flashText) drawString3x5(46, 44, "TIE RACE!");
     }
 
+    drawString3x5(30, 56, "PRESS A TO NEXT");
     blinkTimer++;
 
     if (arduboy.justPressed(A_BUTTON)) {
+      // Record match win once when leaving race result
+      if (p1RaceFrames < p2RaceFrames) {
+        p1Wins++;
+      } else if (p2RaceFrames < p1RaceFrames) {
+        p2Wins++;
+      }
+
       if (currentTrack < TOTAL_TRACKS - 1) {
         currentTrack++;
         activePlayer = 1;
         currentState = STATE_RACE_INTRO;
       } else {
-        currentState = STATE_TITLE;
+        currentState = STATE_LEAGUE_COMPLETE;
       }
     }
     return;
