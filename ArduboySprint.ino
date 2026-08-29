@@ -1,31 +1,40 @@
-// V10 - Expanded structure to 8 tracks, high score support, and progression
-// V9 - Added flashing highscore
-// V8 - Added Course 2 support, Course 2 track walls, dynamic start/checkpoints, and EEPROM support for Course 2 scores
-// V7 - Added Race Intro screen ("RACE 1/8") before track loads
-// V6 - Added Top 5 Highscore Screen with EEPROM storage & 2-second finish delay
-// V5 - Added Title Screen & Initials Entry System
-// V4 - Added Timer, lap counter
-// V3 - Starting to add courses / Added Up button for Brake and Down button for reverse
-// V2 added better car physics (b-button now adds drift)
+// V11 - Refactored Main Menu, 2-Player Pass & Play, Level Select, and HUD Guidance
 #include <Arduboy2.h>
 #include <avr/pgmspace.h>
 
 Arduboy2 arduboy;
 
-// --- Game States ---
-enum GameState {
-  STATE_TITLE,
-  STATE_INITIALS,
-  STATE_RACE_INTRO,
-  STATE_GAME,
-  STATE_HIGHSCORE
+// --- Game Modes & States ---
+enum GameMode {
+  MODE_1PLAYER,
+  MODE_2PLAYER,
+  MODE_LEVEL_SELECT
 };
 
+enum GameState {
+  STATE_TITLE,
+  STATE_MENU,
+  STATE_INITIALS,
+  STATE_LEVEL_SELECT,
+  STATE_RACE_INTRO,
+  STATE_GAME,
+  STATE_PASS_PLAY,
+  STATE_HIGHSCORE,
+  STATE_LEAGUE_COMPLETE
+};
+
+GameMode currentMode = MODE_1PLAYER;
 GameState currentState = STATE_TITLE;
+
+uint8_t menuCursor = 0;
+uint8_t levelSelectCursor = 0;
+uint8_t activePlayer = 1; // Player 1 or Player 2 in 2P Mode
+uint32_t p1RaceFrames = 0;
+uint32_t p2RaceFrames = 0;
 
 // --- Course & Track Management ---
 const uint8_t TOTAL_TRACKS = 8;
-uint8_t currentTrack = 0; // 0 = Track 1, 1 = Track 2, ... 7 = Track 8
+uint8_t currentTrack = 0;
 
 // --- High Score System Data ---
 struct HighScoreEntry {
@@ -33,12 +42,12 @@ struct HighScoreEntry {
   uint32_t frames;
 };
 
-const uint16_t EEPROM_MAGIC_ADDRESS = EEPROM_STORAGE_SPACE_START + 30; // Storage offset
+const uint16_t EEPROM_MAGIC_ADDRESS = EEPROM_STORAGE_SPACE_START + 30;
 const uint16_t EEPROM_SCORES_ADDRESS = EEPROM_MAGIC_ADDRESS + 2;
-const uint16_t EEPROM_MAGIC_VALUE = 0x4D47; // Updated magic byte for 8-track layout
+const uint16_t EEPROM_MAGIC_VALUE = 0x4D47;
 
-HighScoreEntry topScores[8][5]; // High scores for Tracks 1 through 8
-int8_t lastPlayerRank = -1; // Index 0-4 if player placed on board, -1 if missed
+HighScoreEntry topScores[8][5];
+int8_t lastPlayerRank = -1;
 
 // --- Initials Entry State ---
 char playerInitials[4] = "AAA";
@@ -48,7 +57,7 @@ uint8_t blinkTimer = 0;
 // --- Post-Race State ---
 uint16_t finishDelayFrames = 0;
 
-// --- 3x5 Pixel Font Data (0-9, A-Z, space, colon, slash, >) ---
+// --- 3x5 Pixel Font Data ---
 const uint8_t PROGMEM font3x5[][3] = {
   {0x1F, 0x11, 0x1F}, // 0
   {0x00, 0x1F, 0x00}, // 1
@@ -93,7 +102,7 @@ const uint8_t PROGMEM font3x5[][3] = {
 };
 
 void drawChar3x5(int16_t x, int16_t y, char c) {
-  uint8_t idx = 12; // default space
+  uint8_t idx = 12;
   if (c >= '0' && c <= '9') idx = c - '0';
   else if (c == ':') idx = 10;
   else if (c == '/') idx = 11;
@@ -114,7 +123,7 @@ void drawChar3x5(int16_t x, int16_t y, char c) {
 void drawString3x5(int16_t x, int16_t y, const char* str) {
   while (*str) {
     drawChar3x5(x, y, *str);
-    x += 4; // 3 pixels wide + 1 pixel spacing
+    x += 4;
     str++;
   }
 }
@@ -126,235 +135,90 @@ struct Wall {
 
 // Track 1 Walls
 const Wall PROGMEM track1_walls[] = {
-  // Outer boundary
-  { 7,   1, 121,   1},
-  {121,  1, 127,   7},
-  {127,  7, 127,  57},
-  {127, 57, 121,  63},
-  {121, 63,   7,  63},
-  {  7, 63,   1,  57},
-  {  1, 57,   1,   7},
-  {  1,  7,   7,   1},
-
-  // Inner island
-  { 38, 22,  90, 22},
-  { 90, 22,  96, 28},
-  { 96, 28,  96, 36},
-  { 96, 36,  90, 42},
-  { 90, 42,  38, 42},
-  { 38, 42,  32, 36},
-  { 32, 36,  32, 28},
-  { 32, 28,  38, 22}
+  { 7,   1, 121,   1}, {121,  1, 127,   7}, {127,  7, 127,  57}, {127, 57, 121,  63},
+  {121, 63,   7,  63}, {  7, 63,   1,  57}, {  1, 57,   1,   7}, {  1,  7,   7,   1},
+  { 38, 22,  90, 22}, { 90, 22,  96, 28}, { 96, 28,  96, 36}, { 96, 36,  90, 42},
+  { 90, 42,  38, 42}, { 38, 42,  32, 36}, { 32, 36,  32, 28}, { 32, 28,  38, 22}
 };
 
 // Track 2 Walls
 const Wall PROGMEM track2_walls[] = {
-  { 0, 12, 13, 0 },
-  { 13, 0, 42, 0 },
-  { 42, 0, 56, 14 },
-  { 56, 14, 72, 14 },
-  { 72, 14, 84, 2 },
-  { 84, 2, 109, 2 },
-  { 109, 2, 127, 20 },
-  { 127, 20, 127, 49 },
-  { 127, 49, 111, 63 },
-  { 111, 63, 23, 63 },
-  { 23, 63, 15, 63 },
-  { 15, 63, 0, 48 },
-  { 0, 48, 0, 12 },
-  { 75, 41, 34, 41 },
-  { 34, 41, 31, 38 },
-  { 31, 38, 31, 32 },
-  { 31, 32, 34, 29 },
-  { 34, 29, 39, 29 },
-  { 39, 29, 42, 32 },
-  { 42, 32, 84, 32 },
-  { 84, 32, 92, 24 },
-  { 92, 24, 101, 24 },
-  { 101, 24, 107, 30 },
-  { 107, 30, 107, 35 },
-  { 107, 35, 101, 41 },
-  { 101, 41, 75, 41 }
+  { 0, 12, 13, 0 }, { 13, 0, 42, 0 }, { 42, 0, 56, 14 }, { 56, 14, 72, 14 },
+  { 72, 14, 84, 2 }, { 84, 2, 109, 2 }, { 109, 2, 127, 20 }, { 127, 20, 127, 49 },
+  { 127, 49, 111, 63 }, { 111, 63, 23, 63 }, { 23, 63, 15, 63 }, { 15, 63, 0, 48 },
+  { 0, 48, 0, 12 }, { 75, 41, 34, 41 }, { 34, 41, 31, 38 }, { 31, 38, 31, 32 },
+  { 31, 32, 34, 29 }, { 34, 29, 39, 29 }, { 39, 29, 42, 32 }, { 42, 32, 84, 32 },
+  { 84, 32, 92, 24 }, { 92, 24, 101, 24 }, { 101, 24, 107, 30 }, { 107, 30, 107, 35 },
+  { 107, 35, 101, 41 }, { 101, 41, 75, 41 }
 };
 
-// Track 3-8 Placeholder Wall Arrays
+// Tracks 3-8 Walls
 const Wall PROGMEM track3_walls[] = {
-  { 0, 7, 7, 0 },
-  { 7, 0, 57, 0 },
-  { 57, 0, 60, 3 },
-  { 60, 3, 60, 27 },
-  { 60, 27, 62, 29 },
-  { 62, 29, 63, 28 },
-  { 63, 28, 63, 3 },
-  { 63, 3, 67, 0 },
-  { 67, 0, 120, 0 },
-  { 120, 0, 127, 7 },
-  { 127, 7, 127, 57 },
-  { 127, 57, 121, 63 },
-  { 121, 63, 7, 63 },
-  { 7, 63, 0, 56 },
-  { 0, 56, 0, 7 },
-  { 28, 27, 28, 34 },
-  { 28, 34, 38, 44 },
-  { 38, 44, 94, 44 },
-  { 94, 44, 102, 36 },
-  { 102, 36, 102, 20 },
+  { 0, 7, 7, 0 }, { 7, 0, 57, 0 }, { 57, 0, 60, 3 }, { 60, 3, 60, 27 },
+  { 60, 27, 62, 29 }, { 62, 29, 63, 28 }, { 63, 28, 63, 3 }, { 63, 3, 67, 0 },
+  { 67, 0, 120, 0 }, { 120, 0, 127, 7 }, { 127, 7, 127, 57 }, { 127, 57, 121, 63 },
+  { 121, 63, 7, 63 }, { 7, 63, 0, 56 }, { 0, 56, 0, 7 }, { 28, 27, 28, 34 },
+  { 28, 34, 38, 44 }, { 38, 44, 94, 44 }, { 94, 44, 102, 36 }, { 102, 36, 102, 20 },
   { 102, 20, 99, 17 }
 };
 
 const Wall PROGMEM track4_walls[] = {
-  { 0, 6, 7, 0 },
-  { 7, 0, 121, 0 },
-  { 121, 0, 127, 7 },
-  { 127, 7, 127, 58 },
-  { 127, 58, 122, 63 },
-  { 122, 63, 7, 63 },
-  { 7, 63, 0, 56 },
-  { 0, 56, 0, 6 },
-  { 65, 48, 43, 48 },
-  { 43, 48, 31, 36 },
-  { 31, 36, 31, 23 },
-  { 31, 23, 39, 15 },
-  { 39, 15, 66, 15 },
-  { 102, 62, 110, 54 },
-  { 110, 54, 110, 43 },
-  { 110, 43, 98, 31 },
-  { 98, 31, 66, 31 },
-  { 66, 31, 98, 31 },
-  { 98, 31, 109, 20 },
-  { 109, 20, 109, 8 },
+  { 0, 6, 7, 0 }, { 7, 0, 121, 0 }, { 121, 0, 127, 7 }, { 127, 7, 127, 58 },
+  { 127, 58, 122, 63 }, { 122, 63, 7, 63 }, { 7, 63, 0, 56 }, { 0, 56, 0, 6 },
+  { 65, 48, 43, 48 }, { 43, 48, 31, 36 }, { 31, 36, 31, 23 }, { 31, 23, 39, 15 },
+  { 39, 15, 66, 15 }, { 102, 62, 110, 54 }, { 110, 54, 110, 43 }, { 110, 43, 98, 31 },
+  { 98, 31, 66, 31 }, { 66, 31, 98, 31 }, { 98, 31, 109, 20 }, { 109, 20, 109, 8 },
   { 109, 8, 101, 0 }
 };
+
 const Wall PROGMEM track5_walls[] = {
-  { 1, 6, 8, 0 },
-  { 8, 0, 49, 0 },
-  { 49, 0, 58, 9 },
-  { 58, 9, 68, 0 },
-  { 68, 0, 120, 0 },
-  { 120, 0, 127, 7 },
-  { 127, 7, 127, 57 },
-  { 127, 57, 121, 63 },
-  { 121, 63, 64, 63 },
-  { 64, 63, 57, 56 },
-  { 57, 56, 51, 62 },
-  { 51, 62, 10, 62 },
-  { 10, 62, 0, 52 },
-  { 0, 52, 0, 7 },
-  { 0, 7, 3, 4 },
-  { 74, 31, 82, 39 },
-  { 82, 39, 95, 39 },
-  { 95, 39, 101, 33 },
-  { 101, 33, 101, 30 },
-  { 101, 30, 96, 25 },
-  { 96, 25, 80, 25 },
-  { 80, 25, 74, 31 },
-  { 41, 33, 35, 39 },
-  { 35, 39, 26, 39 },
-  { 26, 39, 23, 36 },
-  { 23, 36, 23, 31 },
-  { 23, 31, 27, 27 },
-  { 27, 27, 36, 27 },
-  { 36, 27, 42, 33 },
-  { 42, 33, 41, 34 }
+  { 1, 6, 8, 0 }, { 8, 0, 49, 0 }, { 49, 0, 58, 9 }, { 58, 9, 68, 0 },
+  { 68, 0, 120, 0 }, { 120, 0, 127, 7 }, { 127, 7, 127, 57 }, { 127, 57, 121, 63 },
+  { 121, 63, 64, 63 }, { 64, 63, 57, 56 }, { 57, 56, 51, 62 }, { 51, 62, 10, 62 },
+  { 10, 62, 0, 52 }, { 0, 52, 0, 7 }, { 0, 7, 3, 4 }, { 74, 31, 82, 39 },
+  { 82, 39, 95, 39 }, { 95, 39, 101, 33 }, { 101, 33, 101, 30 }, { 101, 30, 96, 25 },
+  { 96, 25, 80, 25 }, { 80, 25, 74, 31 }, { 41, 33, 35, 39 }, { 35, 39, 26, 39 },
+  { 26, 39, 23, 36 }, { 23, 36, 23, 31 }, { 23, 31, 27, 27 }, { 27, 27, 36, 27 },
+  { 36, 27, 42, 33 }, { 42, 33, 41, 34 }
 };
+
 const Wall PROGMEM track6_walls[] = {
-  { 2, 27, 30, 0 },
-  { 30, 0, 96, 0 },
-  { 96, 0, 127, 31 },
-  { 127, 31, 127, 42 },
-  { 127, 42, 106, 63 },
-  { 106, 63, 21, 63 },
-  { 21, 63, 0, 42 },
-  { 0, 42, 0, 29 },
-  { 0, 29, 3, 26 },
-  { 37, 43, 32, 38 },
-  { 32, 38, 32, 33 },
-  { 32, 33, 54, 11 },
-  { 54, 11, 70, 11 },
-  { 70, 11, 90, 31 },
-  { 90, 31, 90, 38 },
-  { 90, 38, 84, 44 },
-  { 84, 44, 38, 44 },
-  { 38, 44, 36, 42 },
-  { 48, 63, 54, 57 },
-  { 54, 57, 72, 57 },
-  { 72, 57, 78, 63 },
-  { 83, 45, 87, 49 },
-  { 87, 49, 96, 49 },
-  { 96, 49, 102, 43 },
-  { 102, 43, 102, 38 },
-  { 102, 38, 99, 35 },
-  { 99, 35, 91, 35 }
+  { 2, 27, 30, 0 }, { 30, 0, 96, 0 }, { 96, 0, 127, 31 }, { 127, 31, 127, 42 },
+  { 127, 42, 106, 63 }, { 106, 63, 21, 63 }, { 21, 63, 0, 42 }, { 0, 42, 0, 29 },
+  { 0, 29, 3, 26 }, { 37, 43, 32, 38 }, { 32, 38, 32, 33 }, { 32, 33, 54, 11 },
+  { 54, 11, 70, 11 }, { 70, 11, 90, 31 }, { 90, 31, 90, 38 }, { 90, 38, 84, 44 },
+  { 84, 44, 38, 44 }, { 38, 44, 36, 42 }, { 48, 63, 54, 57 }, { 54, 57, 72, 57 },
+  { 72, 57, 78, 63 }, { 83, 45, 87, 49 }, { 87, 49, 96, 49 }, { 96, 49, 102, 43 },
+  { 102, 43, 102, 38 }, { 102, 38, 99, 35 }, { 99, 35, 91, 35 }
 };
+
 const Wall PROGMEM track7_walls[] = {
-    { 44, 63, 36, 63 },
-  { 36, 63, 29, 63 },
-  { 29, 63, 1, 35 },
-  { 1, 35, 1, 17 },
-  { 1, 17, 17, 1 },
-  { 17, 1, 39, 1 },
-  { 39, 1, 55, 17 },
-  { 55, 17, 65, 17 },
-  { 65, 17, 77, 5 },
-  { 77, 5, 99, 5 },
-  { 99, 5, 124, 30 },
-  { 124, 30, 124, 46 },
-  { 124, 46, 107, 63 },
-  { 107, 63, 44, 63 },
-  { 34, 33, 44, 43 },
-  { 44, 43, 47, 46 },
-  { 47, 46, 74, 46 },
-  { 74, 46, 87, 33 }
+  { 44, 63, 36, 63 }, { 36, 63, 29, 63 }, { 29, 63, 1, 35 }, { 1, 35, 1, 17 },
+  { 1, 17, 17, 1 }, { 17, 1, 39, 1 }, { 39, 1, 55, 17 }, { 55, 17, 65, 17 },
+  { 65, 17, 77, 5 }, { 77, 5, 99, 5 }, { 99, 5, 124, 30 }, { 124, 30, 124, 46 },
+  { 124, 46, 107, 63 }, { 107, 63, 44, 63 }, { 34, 33, 44, 43 }, { 44, 43, 47, 46 },
+  { 47, 46, 74, 46 }, { 74, 46, 87, 33 }
 };
+
 const Wall PROGMEM track8_walls[] = {
-    { 87, 45, 96, 45 },
-  { 96, 45, 104, 37 },
-  { 104, 37, 104, 32 },
-  { 104, 32, 98, 26 },
-  { 98, 26, 93, 26 },
-  { 93, 26, 81, 38 },
-  { 81, 38, 40, 38 },
-  { 40, 38, 32, 30 },
-  { 32, 30, 32, 20 },
-  { 32, 20, 30, 18 },
-  { 30, 18, 27, 18 },
-  { 27, 18, 22, 23 },
-  { 22, 23, 22, 37 },
-  { 22, 37, 32, 47 },
-  { 32, 47, 45, 47 },
-  { 45, 47, 50, 42 },
-  { 50, 42, 79, 42 },
-  { 79, 42, 83, 46 },
-  { 83, 46, 95, 46 },
-  { 55, 64, 60, 59 },
-  { 60, 59, 69, 59 },
-  { 69, 59, 76, 63 },
-  { 76, 63, 112, 63 },
-  { 112, 63, 127, 48 },
-  { 127, 48, 127, 15 },
-  { 127, 15, 111, 0 },
-  { 111, 0, 85, 0 },
-  { 85, 0, 65, 20 },
-  { 65, 20, 60, 20 },
-  { 60, 20, 55, 15 },
-  { 55, 15, 55, 8 },
-  { 55, 8, 47, 0 },
-  { 47, 0, 13, 0 },
-  { 13, 0, 0, 14 },
-  { 0, 14, 0, 49 },
-  { 0, 49, 15, 63 },
+  { 87, 45, 96, 45 }, { 96, 45, 104, 37 }, { 104, 37, 104, 32 }, { 104, 32, 98, 26 },
+  { 98, 26, 93, 26 }, { 93, 26, 81, 38 }, { 81, 38, 40, 38 }, { 40, 38, 32, 30 },
+  { 32, 30, 32, 20 }, { 32, 20, 30, 18 }, { 30, 18, 27, 18 }, { 27, 18, 22, 23 },
+  { 22, 23, 22, 37 }, { 22, 37, 32, 47 }, { 32, 47, 45, 47 }, { 45, 47, 50, 42 },
+  { 50, 42, 79, 42 }, { 79, 42, 83, 46 }, { 83, 46, 95, 46 }, { 55, 64, 60, 59 },
+  { 60, 59, 69, 59 }, { 69, 59, 76, 63 }, { 76, 63, 112, 63 }, { 112, 63, 127, 48 },
+  { 127, 48, 127, 15 }, { 127, 15, 111, 0 }, { 111, 0, 85, 0 }, { 85, 0, 65, 20 },
+  { 65, 20, 60, 20 }, { 60, 20, 55, 15 }, { 55, 15, 55, 8 }, { 55, 8, 47, 0 },
+  { 47, 0, 13, 0 }, { 13, 0, 0, 14 }, { 0, 14, 0, 49 }, { 0, 49, 15, 63 },
   { 15, 63, 57, 63 }
 };
 
-// Active track pointer variables
 const Wall* currentWallArray = track1_walls;
 uint8_t currentNumWalls = sizeof(track1_walls) / sizeof(Wall);
 
-// --- Checkpoint & Start/Finish Lines ---
 int8_t checkPointX1 = 64, checkPointY1 = 42, checkPointX2 = 64, checkPointY2 = 63;
 int8_t startLineX1  = 67, startLineY1  = 1,  startLineX2  = 67, startLineY2  = 22;
 
-// --- Race & Timing State ---
 uint8_t currentLap = 1;
 const uint8_t TOTAL_LAPS = 5;
 bool checkpointPassed = false;
@@ -363,22 +227,19 @@ bool raceFinished = false;
 
 uint32_t totalRaceFrames = 0;
 
-// --- Car Physics State ---
 float carX = 64.0;
 float carY = 12.0;
 float angle = 0.0;
 float angularVelocity = 0.0;
-
 float moveX = 0.0;
 float moveY = 0.0;
 
 bool wasHandbraking = false;
 
-// --- Dynamic Track Setup ---
 void setupTrackData(uint8_t trackIdx) {
   currentTrack = trackIdx;
   switch (currentTrack) {
-    case 0: // Track 1
+    case 0:
       currentWallArray = track1_walls;
       currentNumWalls = sizeof(track1_walls) / sizeof(Wall);
       startLineX1 = 67; startLineY1 = 1; startLineX2 = 67; startLineY2 = 22;
@@ -386,7 +247,7 @@ void setupTrackData(uint8_t trackIdx) {
       carX = 64.0; carY = 10.0; angle = 180.0;
       break;
 
-    case 1: // Track 2
+    case 1:
       currentWallArray = track2_walls;
       currentNumWalls = sizeof(track2_walls) / sizeof(Wall);
       startLineX1 = 40; startLineY1 = 42; startLineX2 = 40; startLineY2 = 63;
@@ -394,23 +255,23 @@ void setupTrackData(uint8_t trackIdx) {
       carX = 20.0; carY = 52.0; angle = 0.0;
       break;
 
-    case 2: // Track 3
+    case 2:
       currentWallArray = track3_walls;
       currentNumWalls = sizeof(track3_walls) / sizeof(Wall);
-      startLineX1  = 40, startLineY1  = 45,  startLineX2  = 40, startLineY2  = 63;
+      startLineX1 = 40; startLineY1 = 45; startLineX2 = 40; startLineY2 = 63;
       checkPointX1 = 50; checkPointY1 = 44; checkPointX2 = 50; checkPointY2 = 57;
       carX = 20.0; carY = 52.0; angle = 0.0;
       break;
 
-    case 3: // Track 4
+    case 3:
       currentWallArray = track4_walls;
       currentNumWalls = sizeof(track4_walls) / sizeof(Wall);
-      startLineX1  = 40, startLineY1  = 45,  startLineX2  = 40, startLineY2  = 63;
-      checkPointX1 = 64; checkPointY1 = 42; checkPointX2 = 64; checkPointY2 = 63;;
+      startLineX1 = 40; startLineY1 = 45; startLineX2 = 40; startLineY2 = 63;
+      checkPointX1 = 64; checkPointY1 = 42; checkPointX2 = 64; checkPointY2 = 63;
       carX = 20.0; carY = 52.0; angle = 0.0;
       break;
 
-    case 4: // Track 5
+    case 4:
       currentWallArray = track5_walls;
       currentNumWalls = sizeof(track5_walls) / sizeof(Wall);
       startLineX1 = 30; startLineY1 = 40; startLineX2 = 30; startLineY2 = 63;
@@ -418,23 +279,23 @@ void setupTrackData(uint8_t trackIdx) {
       carX = 20.0; carY = 52.0; angle = 0.0;
       break;
 
-    case 5: // Track 6
+    case 5:
       currentWallArray = track6_walls;
       currentNumWalls = sizeof(track6_walls) / sizeof(Wall);
-      startLineX1 = 40, startLineY1  = 45,  startLineX2  = 40, startLineY2  = 63;
+      startLineX1 = 40; startLineY1 = 45; startLineX2 = 40; startLineY2 = 63;
       checkPointX1 = 64; checkPointY1 = 42; checkPointX2 = 64; checkPointY2 = 63;
       carX = 20.0; carY = 52.0; angle = 0.0;
       break;
 
-    case 6: // Track 7
+    case 6:
       currentWallArray = track7_walls;
       currentNumWalls = sizeof(track7_walls) / sizeof(Wall);
-      startLineX1  = 50, startLineY1  = 48,  startLineX2  = 50, startLineY2  = 63;
+      startLineX1 = 50; startLineY1 = 48; startLineX2 = 50; startLineY2 = 63;
       checkPointX1 = 50; checkPointY1 = 44; checkPointX2 = 50; checkPointY2 = 57;
       carX = 20.0; carY = 52.0; angle = 0.0;
       break;
 
-    case 7: // Track 8
+    case 7:
       currentWallArray = track8_walls;
       currentNumWalls = sizeof(track8_walls) / sizeof(Wall);
       startLineX1 = 40; startLineY1 = 45; startLineX2 = 40; startLineY2 = 63;
@@ -444,7 +305,6 @@ void setupTrackData(uint8_t trackIdx) {
   }
 }
 
-// --- EEPROM Management ---
 void saveHighScoresToEEPROM() {
   EEPROM.put(EEPROM_MAGIC_ADDRESS, EEPROM_MAGIC_VALUE);
   EEPROM.put(EEPROM_SCORES_ADDRESS, topScores);
@@ -457,7 +317,6 @@ void loadHighScoresFromEEPROM() {
   if (magic == EEPROM_MAGIC_VALUE) {
     EEPROM.get(EEPROM_SCORES_ADDRESS, topScores);
   } else {
-    // Default Scores for Tracks 1 to 8
     for (uint8_t t = 0; t < 8; t++) {
       topScores[t][0] = (HighScoreEntry){"ACE", 5400 + (t * 300)};
       topScores[t][1] = (HighScoreEntry){"MAX", 6000 + (t * 300)};
@@ -473,7 +332,6 @@ void insertHighScore(const char* initials, uint32_t scoreFrames) {
   lastPlayerRank = -1;
   for (int8_t i = 0; i < 5; i++) {
     if (scoreFrames < topScores[currentTrack][i].frames) {
-      // Shift lower scores down
       for (int8_t j = 4; j > i; j--) {
         topScores[currentTrack][j] = topScores[currentTrack][j - 1];
       }
@@ -490,7 +348,6 @@ void insertHighScore(const char* initials, uint32_t scoreFrames) {
   }
 }
 
-// --- Helpers ---
 bool linesIntersect(float ax, float ay, float bx, float by, float cx, float cy, float dx, float dy) {
   float denom = (dy - cy) * (bx - ax) - (dx - cx) * (by - ay);
   if (denom == 0) return false;
@@ -535,7 +392,6 @@ void drawTrackAndHUD() {
   
   arduboy.drawLine(startLineX1, startLineY1, startLineX2, startLineY2, WHITE);
 
-  // Render 3x5 HUD at bottom
   uint8_t hudY = 57;
   char timeBuf[6];
   formatTime(totalRaceFrames, timeBuf);
@@ -618,9 +474,8 @@ void updateTitleScreen() {
   if (arduboy.justPressed(A_BUTTON) || arduboy.justPressed(B_BUTTON) ||
       arduboy.justPressed(UP_BUTTON) || arduboy.justPressed(DOWN_BUTTON) ||
       arduboy.justPressed(LEFT_BUTTON) || arduboy.justPressed(RIGHT_BUTTON)) {
-    currentTrack = 0;
-    currentState = STATE_INITIALS;
-    currentInitialIdx = 0;
+    menuCursor = 0;
+    currentState = STATE_MENU;
   }
 
   arduboy.drawRect(4, 4, 120, 56, WHITE);
@@ -629,6 +484,77 @@ void updateTitleScreen() {
   blinkTimer++;
   if ((blinkTimer / 30) % 2 == 0) {
     drawString3x5(30, 42, "PRESS ANY BUTTON");
+  }
+}
+
+// --- Mode Menu Screen Handler ---
+void updateMenuScreen() {
+  if (arduboy.justPressed(UP_BUTTON)) {
+    if (menuCursor > 0) menuCursor--;
+  }
+  if (arduboy.justPressed(DOWN_BUTTON)) {
+    if (menuCursor < 2) menuCursor++;
+  }
+
+  if (arduboy.justPressed(A_BUTTON)) {
+    if (menuCursor == 0) {
+      currentMode = MODE_1PLAYER;
+      currentState = STATE_INITIALS;
+      currentInitialIdx = 0;
+    } else if (menuCursor == 1) {
+      currentMode = MODE_2PLAYER;
+      activePlayer = 1;
+      currentTrack = 0;
+      currentState = STATE_RACE_INTRO;
+    } else if (menuCursor == 2) {
+      currentMode = MODE_LEVEL_SELECT;
+      levelSelectCursor = 0;
+      currentState = STATE_LEVEL_SELECT;
+    }
+  }
+
+  drawString3x5(38, 8, "SELECT MODE");
+  
+  drawString3x5(40, 24, "1 PLAYER");
+  drawString3x5(40, 36, "2 PLAYER");
+  drawString3x5(40, 48, "LEVEL SELECT");
+
+  drawString3x5(30, 24 + (menuCursor * 12), ">");
+}
+
+// --- Level Select Screen Handler ---
+void updateLevelSelectScreen() {
+  if (arduboy.justPressed(UP_BUTTON)) {
+    if (levelSelectCursor > 0) levelSelectCursor--;
+  }
+  if (arduboy.justPressed(DOWN_BUTTON)) {
+    if (levelSelectCursor < 7) levelSelectCursor++;
+  }
+
+  if (arduboy.justPressed(A_BUTTON)) {
+    currentTrack = levelSelectCursor;
+    currentState = STATE_RACE_INTRO;
+  }
+
+  if (arduboy.justPressed(B_BUTTON)) {
+    currentState = STATE_MENU;
+  }
+
+  drawString3x5(38, 4, "SELECT LEVEL");
+
+  uint8_t startIdx = (levelSelectCursor > 4) ? levelSelectCursor - 4 : 0;
+  uint8_t endIdx = (startIdx + 5 < TOTAL_TRACKS) ? startIdx + 5 : TOTAL_TRACKS;
+
+  for (uint8_t i = startIdx; i < endIdx; i++) {
+    int16_t rowY = 16 + ((i - startIdx) * 9);
+    char trackBuf[10];
+    trackBuf[0] = 'C'; trackBuf[1] = 'O'; trackBuf[2] = 'U'; trackBuf[3] = 'R'; trackBuf[4] = 'S'; trackBuf[5] = 'E'; trackBuf[6] = ' ';
+    trackBuf[7] = '1' + i; trackBuf[8] = '\0';
+
+    if (i == levelSelectCursor) {
+      drawString3x5(32, rowY, ">");
+    }
+    drawString3x5(42, rowY, trackBuf);
   }
 }
 
@@ -646,6 +572,7 @@ void updateInitialsScreen() {
   if (arduboy.justPressed(A_BUTTON)) {
     currentInitialIdx++;
     if (currentInitialIdx >= 3) {
+      currentTrack = 0;
       currentState = STATE_RACE_INTRO;
       return;
     }
@@ -683,19 +610,101 @@ void updateRaceIntroScreen() {
   }
 
   char raceBuf[10];
-  raceBuf[0] = 'R'; raceBuf[1] = 'A'; raceBuf[2] = 'C'; raceBuf[3] = 'E'; raceBuf[4] = ' ';
-  raceBuf[5] = '1' + currentTrack; raceBuf[6] = '/'; raceBuf[7] = '8'; raceBuf[8] = '\0';
+  raceBuf[0] = 'C'; raceBuf[1] = 'O'; raceBuf[2] = 'U'; raceBuf[3] = 'R'; raceBuf[4] = 'S'; raceBuf[5] = 'E'; raceBuf[6] = ' ';
+  raceBuf[7] = '1' + currentTrack; raceBuf[8] = '/'; raceBuf[9] = '8'; raceBuf[10] = '\0';
 
-  drawString3x5(48, 24, raceBuf);
+  drawString3x5(40, 16, raceBuf);
+
+  if (currentMode == MODE_2PLAYER) {
+    char pBuf[10];
+    pBuf[0] = 'P'; pBuf[1] = 'L'; pBuf[2] = 'A'; pBuf[3] = 'Y'; pBuf[4] = 'E'; pBuf[5] = 'R'; pBuf[6] = ' ';
+    pBuf[7] = '0' + activePlayer; pBuf[8] = '\0';
+    drawString3x5(46, 28, pBuf);
+  }
+
+  drawString3x5(20, 44, "ACCELERATE A, DRIFT B");
 
   blinkTimer++;
   if ((blinkTimer / 30) % 2 == 0) {
-    drawString3x5(14, 42, "PRESS ANY BUTTON TO CONTINUE");
+    drawString3x5(26, 56, "PRESS ANY BUTTON");
   }
 }
 
-// --- High Score Leaderboard Handler ---
+// --- Pass & Play Transition Screen ---
+void updatePassPlayScreen() {
+  drawString3x5(24, 20, "HAND TO PLAYER 2");
+  drawString3x5(26, 42, "PRESS A TO START");
+
+  if (arduboy.justPressed(A_BUTTON)) {
+    activePlayer = 2;
+    currentState = STATE_RACE_INTRO;
+  }
+}
+
+// --- League Complete Screen Handler ---
+void updateLeagueCompleteScreen() {
+  drawString3x5(6, 20, "CONGRATULATIONS FOR FINISHING");
+  drawString3x5(42, 30, "THE LEAGUE!");
+  
+  blinkTimer++;
+  if ((blinkTimer / 30) % 2 == 0) {
+    drawString3x5(34, 48, "PRESS TO END");
+  }
+
+  if (arduboy.justPressed(A_BUTTON) || arduboy.justPressed(B_BUTTON)) {
+    currentState = STATE_TITLE;
+  }
+}
+
+// --- High Score & Post-Race Leaderboard Handler ---
 void updateHighScoreScreen() {
+  if (currentMode == MODE_2PLAYER) {
+    drawString3x5(36, 12, "RACE RESULT");
+
+    char p1Buf[16], p2Buf[16];
+    char t1[6], t2[6];
+    formatTime(p1RaceFrames, t1);
+    formatTime(p2RaceFrames, t2);
+
+    p1Buf[0] = 'P'; p1Buf[1] = '1'; p1Buf[2] = ':'; p1Buf[3] = ' ';
+    memcpy(p1Buf + 4, t1, 6);
+    p1Buf[10] = '\0';
+
+    p2Buf[0] = 'P'; p2Buf[1] = '2'; p2Buf[2] = ':'; p2Buf[3] = ' ';
+    memcpy(p2Buf + 4, t2, 6);
+    p2Buf[10] = '\0';
+
+    bool showWinningScore = ((blinkTimer / 15) % 2 == 0);
+
+    if (p1RaceFrames < p2RaceFrames) {
+      if (showWinningScore) drawString3x5(38, 26, p1Buf);
+      drawString3x5(38, 36, p2Buf);
+      drawString3x5(30, 48, "PLAYER 1 WINS!");
+    } else if (p2RaceFrames < p1RaceFrames) {
+      drawString3x5(38, 26, p1Buf);
+      if (showWinningScore) drawString3x5(38, 36, p2Buf);
+      drawString3x5(30, 48, "PLAYER 2 WINS!");
+    } else {
+      drawString3x5(38, 26, p1Buf);
+      drawString3x5(38, 36, p2Buf);
+      drawString3x5(46, 48, "TIE RACE!");
+    }
+
+    blinkTimer++;
+
+    if (arduboy.justPressed(A_BUTTON)) {
+      if (currentTrack < TOTAL_TRACKS - 1) {
+        currentTrack++;
+        activePlayer = 1;
+        currentState = STATE_RACE_INTRO;
+      } else {
+        currentState = STATE_TITLE;
+      }
+    }
+    return;
+  }
+
+  // 1 Player / Level Select Highscores
   char titleBuf[20];
   titleBuf[0] = 'T'; titleBuf[1] = 'R'; titleBuf[2] = 'A'; titleBuf[3] = 'C'; titleBuf[4] = 'K'; titleBuf[5] = ' ';
   titleBuf[6] = '1' + currentTrack; titleBuf[7] = ' '; titleBuf[8] = 'H'; titleBuf[9] = 'I'; titleBuf[10] = 'G';
@@ -705,12 +714,10 @@ void updateHighScoreScreen() {
   arduboy.drawFastHLine(8, 11, 112, WHITE);
 
   for (uint8_t i = 0; i < 5; i++) {
-    int16_t rowY = 16 + (i * 8);
+    int16_t rowY = 14 + (i * 7);
 
     char rankStr[3];
-    rankStr[0] = '1' + i;
-    rankStr[1] = '.';
-    rankStr[2] = '\0';
+    rankStr[0] = '1' + i; rankStr[1] = '.'; rankStr[2] = '\0';
     drawString3x5(24, rowY, rankStr);
 
     char timeBuf[6];
@@ -728,21 +735,22 @@ void updateHighScoreScreen() {
     }
   }
 
-  if (currentTrack < TOTAL_TRACKS - 1) {
-    drawString3x5(22, 57, "PRESS A FOR NEXT RACE");
-  } else {
-    drawString3x5(26, 57, "PRESS A TO RESTART");
-  }
+  drawString3x5(16, 56, "A: CONTINUE   B: RETRY");
   blinkTimer++;
 
   if (arduboy.justPressed(A_BUTTON)) {
-    if (currentTrack < TOTAL_TRACKS - 1) {
-      currentTrack++;
-      currentState = STATE_RACE_INTRO;
+    if (currentMode == MODE_LEVEL_SELECT) {
+      currentState = STATE_LEVEL_SELECT;
     } else {
-      currentTrack = 0;
-      currentState = STATE_TITLE;
+      if (currentTrack < TOTAL_TRACKS - 1) {
+        currentTrack++;
+        currentState = STATE_RACE_INTRO;
+      } else {
+        currentState = STATE_LEAGUE_COMPLETE;
+      }
     }
+  } else if (arduboy.justPressed(B_BUTTON)) {
+    currentState = STATE_RACE_INTRO;
   }
 }
 
@@ -763,9 +771,19 @@ void updateGameScreen() {
   if (raceFinished) {
     finishDelayFrames++;
     if (finishDelayFrames >= 120) {
-      insertHighScore(playerInitials, totalRaceFrames);
-      blinkTimer = 0;
-      currentState = STATE_HIGHSCORE;
+      if (currentMode == MODE_2PLAYER) {
+        if (activePlayer == 1) {
+          p1RaceFrames = totalRaceFrames;
+          currentState = STATE_PASS_PLAY;
+        } else {
+          p2RaceFrames = totalRaceFrames;
+          currentState = STATE_HIGHSCORE;
+        }
+      } else {
+        insertHighScore(playerInitials, totalRaceFrames);
+        blinkTimer = 0;
+        currentState = STATE_HIGHSCORE;
+      }
       return;
     }
   }
@@ -889,8 +907,14 @@ void loop() {
     case STATE_TITLE:
       updateTitleScreen();
       break;
+    case STATE_MENU:
+      updateMenuScreen();
+      break;
     case STATE_INITIALS:
       updateInitialsScreen();
+      break;
+    case STATE_LEVEL_SELECT:
+      updateLevelSelectScreen();
       break;
     case STATE_RACE_INTRO:
       updateRaceIntroScreen();
@@ -898,8 +922,14 @@ void loop() {
     case STATE_GAME:
       updateGameScreen();
       break;
+    case STATE_PASS_PLAY:
+      updatePassPlayScreen();
+      break;
     case STATE_HIGHSCORE:
       updateHighScoreScreen();
+      break;
+    case STATE_LEAGUE_COMPLETE:
+      updateLeagueCompleteScreen();
       break;
   }
 
