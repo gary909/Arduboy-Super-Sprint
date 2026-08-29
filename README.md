@@ -2,6 +2,8 @@
 
 My attempt at making a Super Sprint style game on the Arduboy.
 
+V12 - Complete 2-Player Pass & Play with Overall League Champion Display
+
 V11 - Refactored Main Menu, 2-Player Pass & Play, Level Select, and HUD Guidance
 
 V10 - courses refined. pretty good now. + drunk
