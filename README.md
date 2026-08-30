@@ -2,6 +2,8 @@
 
 My attempt at making a Super Sprint style game on the Arduboy.
 
+V14 - Fixed 2-Player Score Update Timing & UI Polish
+
 V13 - Dynamic Memory Optimization, reduced from 79% to 62%
 
 V12 - Complete 2-Player Pass & Play with Overall League Champion Display
