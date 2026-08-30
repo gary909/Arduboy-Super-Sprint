@@ -2,6 +2,17 @@
 
 My attempt at making a Super Sprint style game on the Arduboy.
 
+V1.0 Now finished!
+
+<img width="404" height="267" alt="image" src="https://github.com/user-attachments/assets/d502289b-3a20-4a38-bb64-b8fd0b6bfb32" />
+
+
+_____________DEV LOG_____________
+
+V17 - fixed bugs on track 3/4 checkpoint
+
+V16 - removed track. improvements
+
 V15 - refined HUD positions
 
 <img width="300" height="398" alt="IMG_20260830_125425815" src="https://github.com/user-attachments/assets/82a6a38a-cb8d-4e0e-94e9-1cd749137347" />
