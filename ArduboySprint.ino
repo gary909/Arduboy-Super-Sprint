@@ -1,4 +1,4 @@
-// V12 - Complete 2-Player Pass & Play with Overall League Champion Display
+// V13 - Dynamic Memory Optimization
 #include <Arduboy2.h>
 #include <avr/pgmspace.h>
 
@@ -103,7 +103,7 @@ const uint8_t PROGMEM font3x5[][3] = {
   {0x03, 0x1C, 0x03}, // Y (37)
   {0x19, 0x15, 0x13}, // Z (38)
   {0x14, 0x08, 0x14}, // > (39)
-  {0x00, 0x00, 0x00}  // ! (mapped in drawChar3x5)
+  {0x00, 0x00, 0x00}  // Space default
 };
 
 void drawChar3x5(int16_t x, int16_t y, char c) {
@@ -133,12 +133,22 @@ void drawString3x5(int16_t x, int16_t y, const char* str) {
   }
 }
 
+void drawString3x5_P(int16_t x, int16_t y, const char* str) {
+  char c;
+  while ((c = pgm_read_byte(str++))) {
+    drawChar3x5(x, y, c);
+    x += 4;
+  }
+}
+
+#define drawString3x5_F(x, y, str) drawString3x5_P(x, y, PSTR(str))
+
 // --- Track Data Structures ---
 struct Wall {
   int8_t x1, y1, x2, y2;
 };
 
-// Track 1 Walls
+// Track Walls
 const Wall PROGMEM track1_walls[] = {
   { 7,   1, 121,   1}, {121,  1, 127,   7}, {127,  7, 127,  57}, {127, 57, 121,  63},
   {121, 63,   7,  63}, {  7, 63,   1,  57}, {  1, 57,   1,   7}, {  1,  7,   7,   1},
@@ -146,7 +156,6 @@ const Wall PROGMEM track1_walls[] = {
   { 90, 42,  38, 42}, { 38, 42,  32, 36}, { 32, 36,  32, 28}, { 32, 28,  38, 22}
 };
 
-// Track 2 Walls
 const Wall PROGMEM track2_walls[] = {
   { 0, 12, 13, 0 }, { 13, 0, 42, 0 }, { 42, 0, 56, 14 }, { 56, 14, 72, 14 },
   { 72, 14, 84, 2 }, { 84, 2, 109, 2 }, { 109, 2, 127, 20 }, { 127, 20, 127, 49 },
@@ -157,7 +166,6 @@ const Wall PROGMEM track2_walls[] = {
   { 107, 35, 101, 41 }, { 101, 41, 75, 41 }
 };
 
-// Tracks 3-8 Walls
 const Wall PROGMEM track3_walls[] = {
   { 0, 7, 7, 0 }, { 7, 0, 57, 0 }, { 57, 0, 60, 3 }, { 60, 3, 60, 27 },
   { 60, 27, 62, 29 }, { 62, 29, 63, 28 }, { 63, 28, 63, 3 }, { 63, 3, 67, 0 },
@@ -315,6 +323,8 @@ void saveHighScoresToEEPROM() {
   EEPROM.put(EEPROM_SCORES_ADDRESS, topScores);
 }
 
+const char PROGMEM defaultInitials[][4] = { "ACE", "MAX", "DRI", "SPD", "BOT" };
+
 void loadHighScoresFromEEPROM() {
   uint16_t magic = 0;
   EEPROM.get(EEPROM_MAGIC_ADDRESS, magic);
@@ -323,11 +333,10 @@ void loadHighScoresFromEEPROM() {
     EEPROM.get(EEPROM_SCORES_ADDRESS, topScores);
   } else {
     for (uint8_t t = 0; t < 8; t++) {
-      topScores[t][0] = (HighScoreEntry){"ACE", 5400 + (t * 300)};
-      topScores[t][1] = (HighScoreEntry){"MAX", 6000 + (t * 300)};
-      topScores[t][2] = (HighScoreEntry){"DRI", 6600 + (t * 300)};
-      topScores[t][3] = (HighScoreEntry){"SPD", 7200 + (t * 300)};
-      topScores[t][4] = (HighScoreEntry){"BOT", 7800 + (t * 300)};
+      for (uint8_t i = 0; i < 5; i++) {
+        memcpy_P(topScores[t][i].initials, defaultInitials[i], 4);
+        topScores[t][i].frames = (5400 + (i * 600)) + (t * 300);
+      }
     }
     saveHighScoresToEEPROM();
   }
@@ -402,10 +411,10 @@ void drawTrackAndHUD() {
   formatTime(totalRaceFrames, timeBuf);
 
   if (raceFinished) {
-    drawString3x5(38, hudY, "FINISHED ");
+    drawString3x5_F(38, hudY, "FINISHED ");
     drawString3x5(78, hudY, timeBuf);
   } else if (!raceStarted) {
-    drawString3x5(30, hudY, "PRESS A TO START");
+    drawString3x5_F(30, hudY, "PRESS A TO START");
   } else {
     char lapBuf[8];
     lapBuf[0] = 'L'; lapBuf[1] = 'A'; lapBuf[2] = 'P'; lapBuf[3] = ' ';
@@ -484,11 +493,11 @@ void updateTitleScreen() {
   }
 
   arduboy.drawRect(4, 4, 120, 56, WHITE);
-  drawString3x5(28, 18, "MOTODROME DRIFTER");
+  drawString3x5_F(28, 18, "MOTODROME DRIFTER");
   
   blinkTimer++;
   if ((blinkTimer / 30) % 2 == 0) {
-    drawString3x5(30, 42, "PRESS ANY BUTTON");
+    drawString3x5_F(30, 42, "PRESS ANY BUTTON");
   }
 }
 
@@ -520,13 +529,13 @@ void updateMenuScreen() {
     }
   }
 
-  drawString3x5(38, 8, "SELECT MODE");
+  drawString3x5_F(38, 8, "SELECT MODE");
   
-  drawString3x5(40, 24, "1 PLAYER");
-  drawString3x5(40, 36, "2 PLAYER");
-  drawString3x5(40, 48, "LEVEL SELECT");
+  drawString3x5_F(40, 24, "1 PLAYER");
+  drawString3x5_F(40, 36, "2 PLAYER");
+  drawString3x5_F(40, 48, "LEVEL SELECT");
 
-  drawString3x5(30, 24 + (menuCursor * 12), ">");
+  drawString3x5_F(30, 24 + (menuCursor * 12), ">");
 }
 
 // --- Level Select Screen Handler ---
@@ -547,7 +556,7 @@ void updateLevelSelectScreen() {
     currentState = STATE_MENU;
   }
 
-  drawString3x5(38, 4, "SELECT LEVEL");
+  drawString3x5_F(38, 4, "SELECT LEVEL");
 
   uint8_t startIdx = (levelSelectCursor > 4) ? levelSelectCursor - 4 : 0;
   uint8_t endIdx = (startIdx + 5 < TOTAL_TRACKS) ? startIdx + 5 : TOTAL_TRACKS;
@@ -559,7 +568,7 @@ void updateLevelSelectScreen() {
     trackBuf[7] = '1' + i; trackBuf[8] = '\0';
 
     if (i == levelSelectCursor) {
-      drawString3x5(32, rowY, ">");
+      drawString3x5_F(32, rowY, ">");
     }
     drawString3x5(42, rowY, trackBuf);
   }
@@ -589,7 +598,7 @@ void updateInitialsScreen() {
     currentInitialIdx--;
   }
 
-  drawString3x5(34, 14, "ENTER INITIALS");
+  drawString3x5_F(34, 14, "ENTER INITIALS");
 
   for (uint8_t i = 0; i < 3; i++) {
     int16_t charX = 52 + (i * 10);
@@ -602,7 +611,7 @@ void updateInitialsScreen() {
     }
   }
 
-  drawString3x5(22, 50, "UP/DN: CHOOSE  A: NEXT");
+  drawString3x5_F(22, 50, "UP/DN: CHOOSE  A: NEXT");
   blinkTimer++;
 }
 
@@ -616,7 +625,7 @@ void updateRaceIntroScreen() {
     return;
   }
 
-  char raceBuf[10];
+  char raceBuf[11];
   raceBuf[0] = 'C'; raceBuf[1] = 'O'; raceBuf[2] = 'U'; raceBuf[3] = 'R'; raceBuf[4] = 'S'; raceBuf[5] = 'E'; raceBuf[6] = ' ';
   raceBuf[7] = '1' + currentTrack; raceBuf[8] = '/'; raceBuf[9] = '8'; raceBuf[10] = '\0';
 
@@ -629,18 +638,18 @@ void updateRaceIntroScreen() {
     drawString3x5(46, 28, pBuf);
   }
 
-  drawString3x5(20, 44, "ACCELERATE A, DRIFT B");
+  drawString3x5_F(20, 44, "ACCELERATE A, DRIFT B");
 
   blinkTimer++;
   if ((blinkTimer / 30) % 2 == 0) {
-    drawString3x5(26, 56, "PRESS ANY BUTTON");
+    drawString3x5_F(26, 56, "PRESS ANY BUTTON");
   }
 }
 
 // --- Pass & Play Transition Screen ---
 void updatePassPlayScreen() {
-  drawString3x5(24, 20, "HAND TO PLAYER 2");
-  drawString3x5(26, 42, "PRESS A TO START");
+  drawString3x5_F(24, 20, "HAND TO PLAYER 2");
+  drawString3x5_F(26, 42, "PRESS A TO START");
 
   if (arduboy.justPressed(A_BUTTON)) {
     activePlayer = 2;
@@ -651,7 +660,7 @@ void updatePassPlayScreen() {
 // --- League Complete Screen Handler (1P & 2P Series Finale) ---
 void updateLeagueCompleteScreen() {
   if (currentMode == MODE_2PLAYER) {
-    drawString3x5(34, 8, "SERIES COMPLETE!");
+    drawString3x5_F(34, 8, "SERIES COMPLETE!");
 
     char scoreBuf[14];
     scoreBuf[0] = 'P'; scoreBuf[1] = '1'; scoreBuf[2] = ':'; scoreBuf[3] = ' ';
@@ -661,20 +670,20 @@ void updateLeagueCompleteScreen() {
     drawString3x5(38, 22, scoreBuf);
 
     if (p1Wins > p2Wins) {
-      drawString3x5(22, 36, "PLAYER 1 IS CHAMPION!");
+      drawString3x5_F(22, 36, "PLAYER 1 IS CHAMPION!");
     } else if (p2Wins > p1Wins) {
-      drawString3x5(22, 36, "PLAYER 2 IS CHAMPION!");
+      drawString3x5_F(22, 36, "PLAYER 2 IS CHAMPION!");
     } else {
-      drawString3x5(34, 36, "SERIES ENDS IN A TIE!");
+      drawString3x5_F(34, 36, "SERIES ENDS IN A TIE!");
     }
   } else {
-    drawString3x5(6, 20, "CONGRATULATIONS FOR FINISHING");
-    drawString3x5(42, 30, "THE LEAGUE!");
+    drawString3x5_F(6, 20, "CONGRATULATIONS FOR FINISHING");
+    drawString3x5_F(42, 30, "THE LEAGUE!");
   }
   
   blinkTimer++;
   if ((blinkTimer / 30) % 2 == 0) {
-    drawString3x5(34, 52, "PRESS TO END");
+    drawString3x5_F(34, 52, "PRESS TO END");
   }
 
   if (arduboy.justPressed(A_BUTTON) || arduboy.justPressed(B_BUTTON)) {
@@ -685,9 +694,9 @@ void updateLeagueCompleteScreen() {
 // --- High Score & Post-Race Leaderboard Handler ---
 void updateHighScoreScreen() {
   if (currentMode == MODE_2PLAYER) {
-    drawString3x5(36, 10, "RACE RESULT");
+    drawString3x5_F(36, 10, "RACE RESULT");
 
-    char p1Buf[16], p2Buf[16];
+    char p1Buf[11], p2Buf[11];
     char t1[6], t2[6];
     formatTime(p1RaceFrames, t1);
     formatTime(p2RaceFrames, t2);
@@ -703,22 +712,20 @@ void updateHighScoreScreen() {
     drawString3x5(38, 22, p1Buf);
     drawString3x5(38, 32, p2Buf);
 
-    // Flashing match winner text
     bool flashText = ((blinkTimer / 15) % 2 == 0);
 
     if (p1RaceFrames < p2RaceFrames) {
-      if (flashText) drawString3x5(34, 44, "PLAYER 1 WINS!");
+      if (flashText) drawString3x5_F(34, 44, "PLAYER 1 WINS!");
     } else if (p2RaceFrames < p1RaceFrames) {
-      if (flashText) drawString3x5(34, 44, "PLAYER 2 WINS!");
+      if (flashText) drawString3x5_F(34, 44, "PLAYER 2 WINS!");
     } else {
-      if (flashText) drawString3x5(46, 44, "TIE RACE!");
+      if (flashText) drawString3x5_F(46, 44, "TIE RACE!");
     }
 
-    drawString3x5(30, 56, "PRESS A TO NEXT");
+    drawString3x5_F(30, 56, "PRESS A TO NEXT");
     blinkTimer++;
 
     if (arduboy.justPressed(A_BUTTON)) {
-      // Record match win once when leaving race result
       if (p1RaceFrames < p2RaceFrames) {
         p1Wins++;
       } else if (p2RaceFrames < p1RaceFrames) {
@@ -736,7 +743,6 @@ void updateHighScoreScreen() {
     return;
   }
 
-  // 1 Player / Level Select Highscores
   char titleBuf[20];
   titleBuf[0] = 'T'; titleBuf[1] = 'R'; titleBuf[2] = 'A'; titleBuf[3] = 'C'; titleBuf[4] = 'K'; titleBuf[5] = ' ';
   titleBuf[6] = '1' + currentTrack; titleBuf[7] = ' '; titleBuf[8] = 'H'; titleBuf[9] = 'I'; titleBuf[10] = 'G';
@@ -757,7 +763,7 @@ void updateHighScoreScreen() {
 
     if (i == lastPlayerRank) {
       if ((blinkTimer / 15) % 2 == 0) {
-        drawString3x5(14, rowY, ">");
+        drawString3x5_F(14, rowY, ">");
         drawString3x5(42, rowY, topScores[currentTrack][i].initials);
         drawString3x5(76, rowY, timeBuf);
       }
@@ -767,7 +773,7 @@ void updateHighScoreScreen() {
     }
   }
 
-  drawString3x5(16, 56, "A: CONTINUE   B: RETRY");
+  drawString3x5_F(16, 56, "A: CONTINUE   B: RETRY");
   blinkTimer++;
 
   if (arduboy.justPressed(A_BUTTON)) {
@@ -820,7 +826,7 @@ void updateGameScreen() {
     }
   }
 
-  // Steering Controls
+  // Steering Controls (Physics intact)
   if (isHandbraking && !wasHandbraking) {
     moveX *= 0.85;
     moveY *= 0.85;
@@ -924,6 +930,7 @@ void updateGameScreen() {
 }
 
 void setup() {
+  delay(500); // Give bootloader and USB CDC time
   arduboy.begin();
   arduboy.setFrameRate(60);
   loadHighScoresFromEEPROM();
