@@ -1,4 +1,14 @@
-// V17 - fixed bugs on track 3/4 checkpoint
+/*
+┏┳┓┏━┓╺┳╸┏━┓╺┳┓┏━┓┏━┓┏┳┓┏━╸
+┃┃┃┃ ┃ ┃ ┃ ┃ ┃┃┣┳┛┃ ┃┃┃┃┣╸ 
+╹ ╹┗━┛ ╹ ┗━┛╺┻┛╹┗╸┗━┛╹ ╹┗━╸
+   ╺┳┓┏━┓╻┏━╸╺┳╸┏━╸┏━┓     
+╺━╸ ┃┃┣┳┛┃┣╸  ┃ ┣╸ ┣┳┛╺━╸  
+   ╺┻┛╹┗╸╹╹   ╹ ┗━╸╹┗╸     
+
+ V1.0 - A racing game for Arduboy.
+ Accelerate with A, Drift with B.
+*/
 
 #include <Arduboy2.h>
 #include <avr/pgmspace.h>
