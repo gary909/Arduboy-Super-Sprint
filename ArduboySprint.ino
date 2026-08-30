@@ -1,4 +1,4 @@
-// V16 - removed track. improvements
+// V17 - fixed bugs on track 3/4 checkpoint
 
 #include <Arduboy2.h>
 #include <avr/pgmspace.h>
@@ -261,7 +261,7 @@ void setupTrackData(uint8_t trackIdx) {
       currentWallArray = track6_walls;
       currentNumWalls = sizeof(track6_walls) / sizeof(Wall);
       startLineX1 = 50; startLineY1 = 48; startLineX2 = 50; startLineY2 = 63;
-      checkPointX1 = 50; checkPointY1 = 44; checkPointX2 = 50; checkPointY2 = 57;
+      checkPointX1 = 64; checkPointY1 = 17; checkPointX2 = 64; checkPointY2 = 46;
       carX = 20.0; carY = 52.0; angle = 0.0;
       break;
 
@@ -269,7 +269,7 @@ void setupTrackData(uint8_t trackIdx) {
       currentWallArray = track3_walls;
       currentNumWalls = sizeof(track3_walls) / sizeof(Wall);
       startLineX1 = 40; startLineY1 = 45; startLineX2 = 40; startLineY2 = 63;
-      checkPointX1 = 64; checkPointY1 = 42; checkPointX2 = 64; checkPointY2 = 63;
+      checkPointX1 = 80; checkPointY1 = 42; checkPointX2 = 64; checkPointY2 = 63;
       carX = 20.0; carY = 52.0; angle = 0.0;
       break;
 
@@ -277,7 +277,7 @@ void setupTrackData(uint8_t trackIdx) {
       currentWallArray = track5_walls;
       currentNumWalls = sizeof(track5_walls) / sizeof(Wall);
       startLineX1 = 40; startLineY1 = 45; startLineX2 = 40; startLineY2 = 63;
-      checkPointX1 = 64; checkPointY1 = 42; checkPointX2 = 64; checkPointY2 = 63;
+      checkPointX1 = 64; checkPointY1 = 0; checkPointX2 = 880; checkPointY2 = 25;
       carX = 20.0; carY = 52.0; angle = 0.0;
       break;
 
