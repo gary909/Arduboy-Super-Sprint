@@ -1,4 +1,4 @@
-// V13 - Dynamic Memory Optimization
+// V14 - Fixed 2-Player Score Update Timing & UI Polish
 #include <Arduboy2.h>
 #include <avr/pgmspace.h>
 
@@ -28,7 +28,7 @@ GameState currentState = STATE_TITLE;
 
 uint8_t menuCursor = 0;
 uint8_t levelSelectCursor = 0;
-uint8_t activePlayer = 1; // Player 1 or Player 2 in 2P Mode
+uint8_t activePlayer = 1; 
 uint32_t p1RaceFrames = 0;
 uint32_t p2RaceFrames = 0;
 
@@ -60,6 +60,12 @@ uint8_t blinkTimer = 0;
 
 // --- Post-Race State ---
 uint16_t finishDelayFrames = 0;
+
+// --- Trophy Sprite (16x16 Bitmaps) ---
+const unsigned char PROGMEM trophySprite[] = {
+  0x00, 0xFE, 0x07, 0x0B, 0x13, 0xE3, 0xC6, 0xCC, 0xCC, 0xC6, 0xE3, 0x13, 0x0B, 0x07, 0xFE, 0x00,
+  0x00, 0x00, 0x30, 0x18, 0x0C, 0x07, 0x03, 0x7F, 0x7F, 0x03, 0x07, 0x0C, 0x18, 0x30, 0x00, 0x00
+};
 
 // --- 3x5 Pixel Font Data ---
 const uint8_t PROGMEM font3x5[][3] = {
@@ -148,7 +154,6 @@ struct Wall {
   int8_t x1, y1, x2, y2;
 };
 
-// Track Walls
 const Wall PROGMEM track1_walls[] = {
   { 7,   1, 121,   1}, {121,  1, 127,   7}, {127,  7, 127,  57}, {127, 57, 121,  63},
   {121, 63,   7,  63}, {  7, 63,   1,  57}, {  1, 57,   1,   7}, {  1,  7,   7,   1},
@@ -492,12 +497,29 @@ void updateTitleScreen() {
     currentState = STATE_MENU;
   }
 
-  arduboy.drawRect(4, 4, 120, 56, WHITE);
-  drawString3x5_F(28, 18, "MOTODROME DRIFTER");
-  
+  for (int x = 0; x < 128; x += 4) {
+    arduboy.fillRect(x, 0, 2, 2, WHITE);
+    arduboy.fillRect(x + 2, 2, 2, 2, WHITE);
+    arduboy.fillRect(x, 60, 2, 2, WHITE);
+    arduboy.fillRect(x + 2, 62, 2, 2, WHITE);
+  }
+  for (int y = 0; y < 64; y += 4) {
+    arduboy.fillRect(0, y, 2, 2, WHITE);
+    arduboy.fillRect(2, y + 2, 2, 2, WHITE);
+    arduboy.fillRect(124, y, 2, 2, WHITE);
+    arduboy.fillRect(126, y + 2, 2, 2, WHITE);
+  }
+
+  arduboy.setTextSize(2);
+  arduboy.setCursor(10, 10);
+  arduboy.print(F("MOTODROME"));
+  arduboy.setCursor(22, 28);
+  arduboy.print(F("DRIFTER"));
+  arduboy.setTextSize(1);
+
   blinkTimer++;
   if ((blinkTimer / 30) % 2 == 0) {
-    drawString3x5_F(30, 42, "PRESS ANY BUTTON");
+    drawString3x5_F(30, 48, "PRESS ANY BUTTON");
   }
 }
 
@@ -530,7 +552,6 @@ void updateMenuScreen() {
   }
 
   drawString3x5_F(38, 8, "SELECT MODE");
-  
   drawString3x5_F(40, 24, "1 PLAYER");
   drawString3x5_F(40, 36, "2 PLAYER");
   drawString3x5_F(40, 48, "LEVEL SELECT");
@@ -657,24 +678,26 @@ void updatePassPlayScreen() {
   }
 }
 
-// --- League Complete Screen Handler (1P & 2P Series Finale) ---
+// --- League Complete Screen Handler ---
 void updateLeagueCompleteScreen() {
   if (currentMode == MODE_2PLAYER) {
-    drawString3x5_F(34, 8, "SERIES COMPLETE!");
+    arduboy.drawBitmap(56, 2, trophySprite, 16, 16, WHITE);
+
+    drawString3x5_F(34, 20, "SERIES COMPLETE!");
 
     char scoreBuf[14];
     scoreBuf[0] = 'P'; scoreBuf[1] = '1'; scoreBuf[2] = ':'; scoreBuf[3] = ' ';
     scoreBuf[4] = '0' + p1Wins; scoreBuf[5] = ' '; scoreBuf[6] = ' ';
     scoreBuf[7] = 'P'; scoreBuf[8] = '2'; scoreBuf[9] = ':'; scoreBuf[10] = ' ';
     scoreBuf[11] = '0' + p2Wins; scoreBuf[12] = '\0';
-    drawString3x5(38, 22, scoreBuf);
+    drawString3x5(38, 30, scoreBuf);
 
     if (p1Wins > p2Wins) {
-      drawString3x5_F(22, 36, "PLAYER 1 IS CHAMPION!");
+      drawString3x5_F(22, 42, "PLAYER 1 IS CHAMPION!");
     } else if (p2Wins > p1Wins) {
-      drawString3x5_F(22, 36, "PLAYER 2 IS CHAMPION!");
+      drawString3x5_F(22, 42, "PLAYER 2 IS CHAMPION!");
     } else {
-      drawString3x5_F(34, 36, "SERIES ENDS IN A TIE!");
+      drawString3x5_F(34, 42, "SERIES ENDS IN A TIE!");
     }
   } else {
     drawString3x5_F(6, 20, "CONGRATULATIONS FOR FINISHING");
@@ -683,7 +706,7 @@ void updateLeagueCompleteScreen() {
   
   blinkTimer++;
   if ((blinkTimer / 30) % 2 == 0) {
-    drawString3x5_F(34, 52, "PRESS TO END");
+    drawString3x5_F(34, 54, "PRESS TO END");
   }
 
   if (arduboy.justPressed(A_BUTTON) || arduboy.justPressed(B_BUTTON)) {
@@ -694,6 +717,15 @@ void updateLeagueCompleteScreen() {
 // --- High Score & Post-Race Leaderboard Handler ---
 void updateHighScoreScreen() {
   if (currentMode == MODE_2PLAYER) {
+    // Top HUD Line Score Counters
+    char p1ScoreBuf[6];
+    p1ScoreBuf[0] = 'P'; p1ScoreBuf[1] = '1'; p1ScoreBuf[2] = ':'; p1ScoreBuf[3] = '0' + p1Wins; p1ScoreBuf[4] = '\0';
+    drawString3x5(2, 2, p1ScoreBuf);
+
+    char p2ScoreBuf[6];
+    p2ScoreBuf[0] = 'P'; p2ScoreBuf[1] = '2'; p2ScoreBuf[2] = ':'; p2ScoreBuf[3] = '0' + p2Wins; p2ScoreBuf[4] = '\0';
+    drawString3x5(108, 2, p2ScoreBuf);
+
     drawString3x5_F(36, 10, "RACE RESULT");
 
     char p1Buf[11], p2Buf[11];
@@ -726,12 +758,6 @@ void updateHighScoreScreen() {
     blinkTimer++;
 
     if (arduboy.justPressed(A_BUTTON)) {
-      if (p1RaceFrames < p2RaceFrames) {
-        p1Wins++;
-      } else if (p2RaceFrames < p1RaceFrames) {
-        p2Wins++;
-      }
-
       if (currentTrack < TOTAL_TRACKS - 1) {
         currentTrack++;
         activePlayer = 1;
@@ -815,6 +841,14 @@ void updateGameScreen() {
           currentState = STATE_PASS_PLAY;
         } else {
           p2RaceFrames = totalRaceFrames;
+          
+          // Calculate/increment wins immediately before switching screens
+          if (p1RaceFrames < p2RaceFrames) {
+            p1Wins++;
+          } else if (p2RaceFrames < p1RaceFrames) {
+            p2Wins++;
+          }
+          
           currentState = STATE_HIGHSCORE;
         }
       } else {
@@ -826,7 +860,7 @@ void updateGameScreen() {
     }
   }
 
-  // Steering Controls (Physics intact)
+  // Steering Controls
   if (isHandbraking && !wasHandbraking) {
     moveX *= 0.85;
     moveY *= 0.85;
@@ -930,7 +964,7 @@ void updateGameScreen() {
 }
 
 void setup() {
-  delay(500); // Give bootloader and USB CDC time
+  delay(500); 
   arduboy.begin();
   arduboy.setFrameRate(60);
   loadHighScoresFromEEPROM();
