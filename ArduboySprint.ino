@@ -1,4 +1,5 @@
-// V14 - Fixed 2-Player Score Update Timing & UI Polish
+// V15 - refined HUD positions
+
 #include <Arduboy2.h>
 #include <avr/pgmspace.h>
 
@@ -60,12 +61,6 @@ uint8_t blinkTimer = 0;
 
 // --- Post-Race State ---
 uint16_t finishDelayFrames = 0;
-
-// --- Trophy Sprite (16x16 Bitmaps) ---
-const unsigned char PROGMEM trophySprite[] = {
-  0x00, 0xFE, 0x07, 0x0B, 0x13, 0xE3, 0xC6, 0xCC, 0xCC, 0xC6, 0xE3, 0x13, 0x0B, 0x07, 0xFE, 0x00,
-  0x00, 0x00, 0x30, 0x18, 0x0C, 0x07, 0x03, 0x7F, 0x7F, 0x03, 0x07, 0x0C, 0x18, 0x30, 0x00, 0x00
-};
 
 // --- 3x5 Pixel Font Data ---
 const uint8_t PROGMEM font3x5[][3] = {
@@ -411,22 +406,56 @@ void drawTrackAndHUD() {
   
   arduboy.drawLine(startLineX1, startLineY1, startLineX2, startLineY2, WHITE);
 
-  uint8_t hudY = 57;
+  // Determine dynamic UI positions based on track layout
+  int16_t hudX = 36;
+  int16_t hudY = 28;
+
+  switch (currentTrack) {
+    case 0: // Track 1: Moved down 2px and right 2px
+      hudX = 38; hudY = 30;
+      break;
+    case 1: // Track 2: Moved right 5px
+      hudX = 41; hudY = 34;
+      break;
+    case 2: // Track 3: Moved left 2px
+      hudX = 68; hudY = 2;
+      break;
+    case 3: // Track 4: Kept at current position
+      hudX = 7;  hudY = 2;
+      break;
+    case 4: // Track 5: Kept at current position
+      hudX = 70; hudY = 56;
+      break;
+    case 5: // Track 6: Moved left 1px
+      hudX = 34; hudY = 33;
+      break;
+    case 6: // Track 7: Moved left 5px
+      hudX = 65; hudY = 0;
+      break;
+    case 7: // Track 8: Moved left 15px and up 2px
+      hudX = 60; hudY = 0;
+      break;
+  }
+
   char timeBuf[6];
   formatTime(totalRaceFrames, timeBuf);
 
   if (raceFinished) {
-    drawString3x5_F(38, hudY, "FINISHED ");
-    drawString3x5(78, hudY, timeBuf);
+    drawString3x5_F(hudX, hudY, "FINISHED");
+    drawString3x5(hudX + 36, hudY, timeBuf);
   } else if (!raceStarted) {
-    drawString3x5_F(30, hudY, "PRESS A TO START");
+    // Exactly aligned with the timer/lap HUD position
+    drawString3x5_F(hudX, hudY, "PRESS A TO START");
   } else {
-    char lapBuf[8];
-    lapBuf[0] = 'L'; lapBuf[1] = 'A'; lapBuf[2] = 'P'; lapBuf[3] = ' ';
-    lapBuf[4] = '0' + currentLap; lapBuf[5] = '/'; lapBuf[6] = '0' + TOTAL_LAPS; lapBuf[7] = '\0';
+    // Single-line HUD format: "LAP X/5  00:00"
+    char hudBuf[16];
+    hudBuf[0] = 'L'; hudBuf[1] = 'A'; hudBuf[2] = 'P'; hudBuf[3] = ' ';
+    hudBuf[4] = '0' + currentLap; hudBuf[5] = '/'; hudBuf[6] = '0' + TOTAL_LAPS;
+    hudBuf[7] = ' '; hudBuf[8] = ' ';
+    memcpy(hudBuf + 9, timeBuf, 6);
+    hudBuf[15] = '\0';
 
-    drawString3x5(38, hudY, lapBuf);
-    drawString3x5(74, hudY, timeBuf);
+    drawString3x5(hudX, hudY, hudBuf);
   }
 }
 
@@ -669,8 +698,8 @@ void updateRaceIntroScreen() {
 
 // --- Pass & Play Transition Screen ---
 void updatePassPlayScreen() {
-  drawString3x5_F(24, 20, "HAND TO PLAYER 2");
-  drawString3x5_F(26, 42, "PRESS A TO START");
+  drawString3x5_F(48, 20, "PLAYER 2");
+  drawString3x5_F(32, 42, "PRESS A TO START");
 
   if (arduboy.justPressed(A_BUTTON)) {
     activePlayer = 2;
@@ -681,23 +710,21 @@ void updatePassPlayScreen() {
 // --- League Complete Screen Handler ---
 void updateLeagueCompleteScreen() {
   if (currentMode == MODE_2PLAYER) {
-    arduboy.drawBitmap(56, 2, trophySprite, 16, 16, WHITE);
-
-    drawString3x5_F(34, 20, "SERIES COMPLETE!");
+    drawString3x5_F(34, 16, "SERIES COMPLETE!");
 
     char scoreBuf[14];
     scoreBuf[0] = 'P'; scoreBuf[1] = '1'; scoreBuf[2] = ':'; scoreBuf[3] = ' ';
     scoreBuf[4] = '0' + p1Wins; scoreBuf[5] = ' '; scoreBuf[6] = ' ';
     scoreBuf[7] = 'P'; scoreBuf[8] = '2'; scoreBuf[9] = ':'; scoreBuf[10] = ' ';
     scoreBuf[11] = '0' + p2Wins; scoreBuf[12] = '\0';
-    drawString3x5(38, 30, scoreBuf);
+    drawString3x5(38, 28, scoreBuf);
 
     if (p1Wins > p2Wins) {
-      drawString3x5_F(22, 42, "PLAYER 1 IS CHAMPION!");
+      drawString3x5_F(22, 40, "PLAYER 1 IS CHAMPION!");
     } else if (p2Wins > p1Wins) {
-      drawString3x5_F(22, 42, "PLAYER 2 IS CHAMPION!");
+      drawString3x5_F(22, 40, "PLAYER 2 IS CHAMPION!");
     } else {
-      drawString3x5_F(34, 42, "SERIES ENDS IN A TIE!");
+      drawString3x5_F(34, 40, "SERIES ENDS IN A TIE!");
     }
   } else {
     drawString3x5_F(6, 20, "CONGRATULATIONS FOR FINISHING");
@@ -842,7 +869,6 @@ void updateGameScreen() {
         } else {
           p2RaceFrames = totalRaceFrames;
           
-          // Calculate/increment wins immediately before switching screens
           if (p1RaceFrames < p2RaceFrames) {
             p1Wins++;
           } else if (p2RaceFrames < p1RaceFrames) {
