@@ -1,4 +1,4 @@
-// V15 - refined HUD positions
+// V16 - removed track. improvements
 
 #include <Arduboy2.h>
 #include <avr/pgmspace.h>
@@ -38,7 +38,7 @@ uint8_t p1Wins = 0;
 uint8_t p2Wins = 0;
 
 // --- Course & Track Management ---
-const uint8_t TOTAL_TRACKS = 8;
+const uint8_t TOTAL_TRACKS = 7;
 uint8_t currentTrack = 0;
 
 // --- High Score System Data ---
@@ -51,7 +51,7 @@ const uint16_t EEPROM_MAGIC_ADDRESS = EEPROM_STORAGE_SPACE_START + 30;
 const uint16_t EEPROM_SCORES_ADDRESS = EEPROM_MAGIC_ADDRESS + 2;
 const uint16_t EEPROM_MAGIC_VALUE = 0x4D47;
 
-HighScoreEntry topScores[8][5];
+HighScoreEntry topScores[7][5];
 int8_t lastPlayerRank = -1;
 
 // --- Initials Entry State ---
@@ -185,17 +185,6 @@ const Wall PROGMEM track4_walls[] = {
 };
 
 const Wall PROGMEM track5_walls[] = {
-  { 1, 6, 8, 0 }, { 8, 0, 49, 0 }, { 49, 0, 58, 9 }, { 58, 9, 68, 0 },
-  { 68, 0, 120, 0 }, { 120, 0, 127, 7 }, { 127, 7, 127, 57 }, { 127, 57, 121, 63 },
-  { 121, 63, 64, 63 }, { 64, 63, 57, 56 }, { 57, 56, 51, 62 }, { 51, 62, 10, 62 },
-  { 10, 62, 0, 52 }, { 0, 52, 0, 7 }, { 0, 7, 3, 4 }, { 74, 31, 82, 39 },
-  { 82, 39, 95, 39 }, { 95, 39, 101, 33 }, { 101, 33, 101, 30 }, { 101, 30, 96, 25 },
-  { 96, 25, 80, 25 }, { 80, 25, 74, 31 }, { 41, 33, 35, 39 }, { 35, 39, 26, 39 },
-  { 26, 39, 23, 36 }, { 23, 36, 23, 31 }, { 23, 31, 27, 27 }, { 27, 27, 36, 27 },
-  { 36, 27, 42, 33 }, { 42, 33, 41, 34 }
-};
-
-const Wall PROGMEM track6_walls[] = {
   { 2, 27, 30, 0 }, { 30, 0, 96, 0 }, { 96, 0, 127, 31 }, { 127, 31, 127, 42 },
   { 127, 42, 106, 63 }, { 106, 63, 21, 63 }, { 21, 63, 0, 42 }, { 0, 42, 0, 29 },
   { 0, 29, 3, 26 }, { 37, 43, 32, 38 }, { 32, 38, 32, 33 }, { 32, 33, 54, 11 },
@@ -205,7 +194,7 @@ const Wall PROGMEM track6_walls[] = {
   { 102, 43, 102, 38 }, { 102, 38, 99, 35 }, { 99, 35, 91, 35 }
 };
 
-const Wall PROGMEM track7_walls[] = {
+const Wall PROGMEM track6_walls[] = {
   { 44, 63, 36, 63 }, { 36, 63, 29, 63 }, { 29, 63, 1, 35 }, { 1, 35, 1, 17 },
   { 1, 17, 17, 1 }, { 17, 1, 39, 1 }, { 39, 1, 55, 17 }, { 55, 17, 65, 17 },
   { 65, 17, 77, 5 }, { 77, 5, 99, 5 }, { 99, 5, 124, 30 }, { 124, 30, 124, 46 },
@@ -213,7 +202,7 @@ const Wall PROGMEM track7_walls[] = {
   { 47, 46, 74, 46 }, { 74, 46, 87, 33 }
 };
 
-const Wall PROGMEM track8_walls[] = {
+const Wall PROGMEM track7_walls[] = {
   { 87, 45, 96, 45 }, { 96, 45, 104, 37 }, { 104, 37, 104, 32 }, { 104, 32, 98, 26 },
   { 98, 26, 93, 26 }, { 93, 26, 81, 38 }, { 81, 38, 40, 38 }, { 40, 38, 32, 30 },
   { 32, 30, 32, 20 }, { 32, 20, 30, 18 }, { 30, 18, 27, 18 }, { 27, 18, 22, 23 },
@@ -255,9 +244,9 @@ void setupTrackData(uint8_t trackIdx) {
     case 0:
       currentWallArray = track1_walls;
       currentNumWalls = sizeof(track1_walls) / sizeof(Wall);
-      startLineX1 = 67; startLineY1 = 1; startLineX2 = 67; startLineY2 = 22;
-      checkPointX1 = 64; checkPointY1 = 42; checkPointX2 = 64; checkPointY2 = 63;
-      carX = 64.0; carY = 10.0; angle = 180.0;
+      startLineX1 = 40; startLineY1 = 42; startLineX2 = 40; startLineY2 = 63;
+      checkPointX1 = 50; checkPointY1 = 44; checkPointX2 = 50; checkPointY2 = 57;
+      carX = 20.0; carY = 52.0; angle = 0.0;
       break;
 
     case 1:
@@ -268,17 +257,17 @@ void setupTrackData(uint8_t trackIdx) {
       carX = 20.0; carY = 52.0; angle = 0.0;
       break;
 
-    case 2:
-      currentWallArray = track3_walls;
-      currentNumWalls = sizeof(track3_walls) / sizeof(Wall);
-      startLineX1 = 40; startLineY1 = 45; startLineX2 = 40; startLineY2 = 63;
+    case 2: // Now Original Track 6
+      currentWallArray = track6_walls;
+      currentNumWalls = sizeof(track6_walls) / sizeof(Wall);
+      startLineX1 = 50; startLineY1 = 48; startLineX2 = 50; startLineY2 = 63;
       checkPointX1 = 50; checkPointY1 = 44; checkPointX2 = 50; checkPointY2 = 57;
       carX = 20.0; carY = 52.0; angle = 0.0;
       break;
 
-    case 3:
-      currentWallArray = track4_walls;
-      currentNumWalls = sizeof(track4_walls) / sizeof(Wall);
+    case 3: // Now Original Track 3
+      currentWallArray = track3_walls;
+      currentNumWalls = sizeof(track3_walls) / sizeof(Wall);
       startLineX1 = 40; startLineY1 = 45; startLineX2 = 40; startLineY2 = 63;
       checkPointX1 = 64; checkPointY1 = 42; checkPointX2 = 64; checkPointY2 = 63;
       carX = 20.0; carY = 52.0; angle = 0.0;
@@ -287,14 +276,14 @@ void setupTrackData(uint8_t trackIdx) {
     case 4:
       currentWallArray = track5_walls;
       currentNumWalls = sizeof(track5_walls) / sizeof(Wall);
-      startLineX1 = 30; startLineY1 = 40; startLineX2 = 30; startLineY2 = 63;
+      startLineX1 = 40; startLineY1 = 45; startLineX2 = 40; startLineY2 = 63;
       checkPointX1 = 64; checkPointY1 = 42; checkPointX2 = 64; checkPointY2 = 63;
       carX = 20.0; carY = 52.0; angle = 0.0;
       break;
 
-    case 5:
-      currentWallArray = track6_walls;
-      currentNumWalls = sizeof(track6_walls) / sizeof(Wall);
+    case 5: // Now Original Track 4
+      currentWallArray = track4_walls;
+      currentNumWalls = sizeof(track4_walls) / sizeof(Wall);
       startLineX1 = 40; startLineY1 = 45; startLineX2 = 40; startLineY2 = 63;
       checkPointX1 = 64; checkPointY1 = 42; checkPointX2 = 64; checkPointY2 = 63;
       carX = 20.0; carY = 52.0; angle = 0.0;
@@ -303,14 +292,6 @@ void setupTrackData(uint8_t trackIdx) {
     case 6:
       currentWallArray = track7_walls;
       currentNumWalls = sizeof(track7_walls) / sizeof(Wall);
-      startLineX1 = 50; startLineY1 = 48; startLineX2 = 50; startLineY2 = 63;
-      checkPointX1 = 50; checkPointY1 = 44; checkPointX2 = 50; checkPointY2 = 57;
-      carX = 20.0; carY = 52.0; angle = 0.0;
-      break;
-
-    case 7:
-      currentWallArray = track8_walls;
-      currentNumWalls = sizeof(track8_walls) / sizeof(Wall);
       startLineX1 = 40; startLineY1 = 45; startLineX2 = 40; startLineY2 = 63;
       checkPointX1 = 50; checkPointY1 = 44; checkPointX2 = 50; checkPointY2 = 57;
       carX = 20.0; carY = 52.0; angle = 0.0;
@@ -332,7 +313,7 @@ void loadHighScoresFromEEPROM() {
   if (magic == EEPROM_MAGIC_VALUE) {
     EEPROM.get(EEPROM_SCORES_ADDRESS, topScores);
   } else {
-    for (uint8_t t = 0; t < 8; t++) {
+    for (uint8_t t = 0; t < TOTAL_TRACKS; t++) {
       for (uint8_t i = 0; i < 5; i++) {
         memcpy_P(topScores[t][i].initials, defaultInitials[i], 4);
         topScores[t][i].frames = (5400 + (i * 600)) + (t * 300);
@@ -411,28 +392,25 @@ void drawTrackAndHUD() {
   int16_t hudY = 28;
 
   switch (currentTrack) {
-    case 0: // Track 1: Moved down 2px and right 2px
+    case 0: // Track 1
       hudX = 38; hudY = 30;
       break;
-    case 1: // Track 2: Moved right 5px
+    case 1: // Track 2
       hudX = 41; hudY = 34;
       break;
-    case 2: // Track 3: Moved left 2px
-      hudX = 68; hudY = 2;
+    case 2: // Track 3
+      hudX = 60; hudY = 0;
       break;
-    case 3: // Track 4: Kept at current position
+    case 3: // Track 4
       hudX = 7;  hudY = 2;
       break;
-    case 4: // Track 5: Kept at current position
-      hudX = 70; hudY = 56;
-      break;
-    case 5: // Track 6: Moved left 1px
+    case 4: // Track 5 (formerly Track 6)
       hudX = 34; hudY = 33;
       break;
-    case 6: // Track 7: Moved left 5px
+    case 5: // Track 6 (formerly Track 7)
       hudX = 65; hudY = 0;
       break;
-    case 7: // Track 8: Moved left 15px and up 2px
+    case 6: // Track 7 (formerly Track 8)
       hudX = 60; hudY = 0;
       break;
   }
@@ -444,10 +422,8 @@ void drawTrackAndHUD() {
     drawString3x5_F(hudX, hudY, "FINISHED");
     drawString3x5(hudX + 36, hudY, timeBuf);
   } else if (!raceStarted) {
-    // Exactly aligned with the timer/lap HUD position
     drawString3x5_F(hudX, hudY, "PRESS A TO START");
   } else {
-    // Single-line HUD format: "LAP X/5  00:00"
     char hudBuf[16];
     hudBuf[0] = 'L'; hudBuf[1] = 'A'; hudBuf[2] = 'P'; hudBuf[3] = ' ';
     hudBuf[4] = '0' + currentLap; hudBuf[5] = '/'; hudBuf[6] = '0' + TOTAL_LAPS;
@@ -594,7 +570,7 @@ void updateLevelSelectScreen() {
     if (levelSelectCursor > 0) levelSelectCursor--;
   }
   if (arduboy.justPressed(DOWN_BUTTON)) {
-    if (levelSelectCursor < 7) levelSelectCursor++;
+    if (levelSelectCursor < TOTAL_TRACKS - 1) levelSelectCursor++;
   }
 
   if (arduboy.justPressed(A_BUTTON)) {
@@ -677,7 +653,7 @@ void updateRaceIntroScreen() {
 
   char raceBuf[11];
   raceBuf[0] = 'C'; raceBuf[1] = 'O'; raceBuf[2] = 'U'; raceBuf[3] = 'R'; raceBuf[4] = 'S'; raceBuf[5] = 'E'; raceBuf[6] = ' ';
-  raceBuf[7] = '1' + currentTrack; raceBuf[8] = '/'; raceBuf[9] = '8'; raceBuf[10] = '\0';
+  raceBuf[7] = '1' + currentTrack; raceBuf[8] = '/'; raceBuf[9] = '0' + TOTAL_TRACKS; raceBuf[10] = '\0';
 
   drawString3x5(40, 16, raceBuf);
 
@@ -744,7 +720,6 @@ void updateLeagueCompleteScreen() {
 // --- High Score & Post-Race Leaderboard Handler ---
 void updateHighScoreScreen() {
   if (currentMode == MODE_2PLAYER) {
-    // Top HUD Line Score Counters
     char p1ScoreBuf[6];
     p1ScoreBuf[0] = 'P'; p1ScoreBuf[1] = '1'; p1ScoreBuf[2] = ':'; p1ScoreBuf[3] = '0' + p1Wins; p1ScoreBuf[4] = '\0';
     drawString3x5(2, 2, p1ScoreBuf);
