@@ -2,6 +2,11 @@
 
 My attempt at making a Super Sprint style game on the Arduboy.
 
+V15 - refined HUD positions
+
+<img width="300" height="398" alt="IMG_20260830_125425815" src="https://github.com/user-attachments/assets/82a6a38a-cb8d-4e0e-94e9-1cd749137347" />
+
+
 V14 - Fixed 2-Player Score Update Timing & UI Polish
 
 V13 - Dynamic Memory Optimization, reduced from 79% to 62%
