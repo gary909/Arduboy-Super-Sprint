@@ -1,0 +1,13 @@
+{
+  "title": "Motodrome Drifter",
+  "author": "Gary White",
+  "version": "1.0",
+  "description": "Top-down drift racer with 7 courses, 1P high score tracking, and 2P pass-and-play series mode.",
+  "banner": "banner.png",
+  "binaries": [
+    {
+      "filename": "MotodromeDrifter.hex",
+      "device": "Arduboy"
+    }
+  ]
+}
