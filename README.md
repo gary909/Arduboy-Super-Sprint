@@ -10,6 +10,10 @@ My attempt at making a Super Sprint style game on the Arduboy.
 
 V1.0 Now finished!
 
+Play in browser (note, it plays better on the Arduboy controls):
+
+https://tiberiusbrown.github.io/Ardens/?file=https://github.com/gary909/Arduboy-Super-Sprint/releases/download/v1.0.0/MotodromeDrifter.arduboy
+
 <img width="404" height="267" alt="image" src="https://github.com/user-attachments/assets/d502289b-3a20-4a38-bb64-b8fd0b6bfb32" />
 
 
