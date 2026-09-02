@@ -17,6 +17,11 @@ https://tiberiusbrown.github.io/Ardens/?file=https://github.com/gary909/Arduboy-
 <img width="404" height="267" alt="image" src="https://github.com/user-attachments/assets/d502289b-3a20-4a38-bb64-b8fd0b6bfb32" />
 
 
+Arduboy hex files and .arduboy files can be found here:
+
+https://github.com/gary909/Arduboy-Super-Sprint/releases/tag/v1.0.0
+
+
 _____________DEV LOG_____________
 
 V17 - fixed bugs on track 3/4 checkpoint
