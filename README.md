@@ -2,6 +2,12 @@
 
 My attempt at making a Super Sprint style game on the Arduboy.
 
+<img width="128" height="64" alt="metrodromeDrifter_Lap" src="https://github.com/user-attachments/assets/1f8280b4-6c9a-4ce0-b737-9f1fe7b87ffc" />
+
+
+<img width="128" height="64" alt="motodromeDrifter_Overview" src="https://github.com/user-attachments/assets/0a065d11-9f8c-4de7-a6cb-8b1a8c169fdb" />
+
+
 V1.0 Now finished!
 
 <img width="404" height="267" alt="image" src="https://github.com/user-attachments/assets/d502289b-3a20-4a38-bb64-b8fd0b6bfb32" />
@@ -25,6 +31,9 @@ V13 - Dynamic Memory Optimization, reduced from 79% to 62%
 V12 - Complete 2-Player Pass & Play with Overall League Champion Display
 
 V11 - Refactored Main Menu, 2-Player Pass & Play, Level Select, and HUD Guidance
+
+<img width="128" height="64" alt="motodromeDrifter_Titles" src="https://github.com/user-attachments/assets/225f49ee-4d87-4073-a229-47eb35336154" />
+
 
 V10 - courses refined. pretty good now. + drunk
 
