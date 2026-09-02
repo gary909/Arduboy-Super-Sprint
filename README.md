@@ -1,5 +1,7 @@
 "# Arduboy-Super-Sprint" 
 
+*MIT Open Source license added
+
 My attempt at making a Super Sprint style game on the Arduboy.
 
 <img width="128" height="64" alt="metrodromeDrifter_Lap" src="https://github.com/user-attachments/assets/1f8280b4-6c9a-4ce0-b737-9f1fe7b87ffc" />
