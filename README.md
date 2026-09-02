@@ -1,6 +1,6 @@
 "# Arduboy-Super-Sprint" 
 
-*MIT Open Source license added
+MIT Open Source license added
 
 My attempt at making a Super Sprint style game on the Arduboy.
 
